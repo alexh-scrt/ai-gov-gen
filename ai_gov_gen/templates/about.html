@@ -1,0 +1,384 @@
+{% extends 'base.html' %}
+{#
+  ai_gov_gen/templates/about.html
+
+  About page showing supported frameworks, project information, and usage guide.
+
+  Context variables (provided by routes.about):
+    frameworks — list of framework metadata dicts
+    categories — list of category metadata dicts
+    title      — page title string
+#}
+
+{% block title_tag %}About AI Gov Gen — Frameworks and Usage{% endblock %}
+
+{% block content %}
+
+{# ================================================================
+   PAGE HEADER
+   ================================================================ #}
+<div class="agg-page-header">
+  <div class="container-xl">
+    <nav aria-label="breadcrumb">
+      <ol class="breadcrumb">
+        <li class="breadcrumb-item"><a href="{{ url_for('main.index') }}">Home</a></li>
+        <li class="breadcrumb-item active" aria-current="page">About</li>
+      </ol>
+    </nav>
+    <h1>
+      <i class="bi bi-info-circle me-2" aria-hidden="true"></i>
+      About AI Gov Gen
+    </h1>
+    <p class="lead">
+      Automated AI governance document generation aligned with leading risk
+      frameworks. Learn about the supported standards and how the tool works.
+    </p>
+  </div>
+</div>
+
+<div class="container-xl py-4">
+  <div class="row g-4">
+
+    {# ============================================================
+       LEFT: Table of Contents / Navigation
+       ============================================================ #}
+    <div class="col-12 col-lg-3">
+      <div class="sticky-top" style="top: 5rem;">
+        <div class="card border-0 shadow-sm">
+          <div class="card-body p-3">
+            <h6
+              style="font-size:0.78rem; font-weight:700; text-transform:uppercase;
+                     letter-spacing:0.08em; color:var(--agg-text-muted); margin-bottom:0.75rem;"
+            >
+              <i class="bi bi-list-ul me-1" aria-hidden="true"></i>
+              On This Page
+            </h6>
+            <ul class="list-unstyled mb-0" style="font-size:0.85rem;">
+              <li class="mb-1">
+                <a href="#overview" style="color:var(--agg-primary-light); text-decoration:none;">
+                  Overview
+                </a>
+              </li>
+              <li class="mb-1">
+                <a href="#how-it-works" style="color:var(--agg-primary-light); text-decoration:none;">
+                  How It Works
+                </a>
+              </li>
+              <li class="mb-1">
+                <a href="#frameworks" style="color:var(--agg-primary-light); text-decoration:none;">
+                  Supported Frameworks
+                </a>
+              </li>
+              {% for fw in frameworks %}
+              <li class="ms-3 mb-1" style="font-size:0.78rem;">
+                <a href="#{{ fw.id }}" style="color:var(--agg-text-muted); text-decoration:none;">
+                  {{ fw.label | e }}
+                </a>
+              </li>
+              {% endfor %}
+              <li class="mb-1">
+                <a href="#categories" style="color:var(--agg-primary-light); text-decoration:none;">
+                  Assessment Categories
+                </a>
+              </li>
+              <li class="mb-1">
+                <a href="#outputs" style="color:var(--agg-primary-light); text-decoration:none;">
+                  Generated Outputs
+                </a>
+              </li>
+              <li class="mb-1">
+                <a href="#disclaimer" style="color:var(--agg-primary-light); text-decoration:none;">
+                  Disclaimer
+                </a>
+              </li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </div>{# /sidebar #}
+
+    {# ============================================================
+       RIGHT: Main content
+       ============================================================ #}
+    <div class="col-12 col-lg-9">
+
+      {# --- Overview --- #}
+      <section id="overview" class="mb-5" aria-labelledby="overview-heading">
+        <h2 id="overview-heading"
+            style="font-size:1.4rem; font-weight:800; color:var(--agg-primary);
+                   border-bottom:2px solid var(--agg-accent); padding-bottom:0.5rem;
+                   margin-bottom:1.25rem;">
+          Overview
+        </h2>
+        <p>
+          <strong>AI Gov Gen</strong> is a web-based tool that guides teams through a
+          structured AI risk assessment questionnaire and automatically generates
+          compliance-ready governance documents for AI tool deployments.
+        </p>
+        <p>
+          The tool draws on established frameworks including the
+          <strong>HKS AI Risk Framework</strong> and <strong>NIST AI RMF</strong>
+          to produce tailored governance checklists, System Security Plan (SSP)
+          entries, and AI use policy documents. Outputs are available as formatted
+          DOCX and PDF files suitable for submission to compliance reviewers or
+          insertion into existing security documentation.
+        </p>
+        <div
+          class="p-3 rounded"
+          style="background:var(--agg-accent-light); border-left:4px solid var(--agg-accent); font-size:0.875rem;"
+          role="note"
+        >
+          <i class="bi bi-shield-check me-1 text-primary-agg" aria-hidden="true"></i>
+          <strong>No data is persisted</strong> beyond your current browser session.
+          Questionnaire responses and generated documents exist only in your session
+          cookie and are cleared when you close your browser or reset the assessment.
+        </div>
+      </section>
+
+      {# --- How It Works --- #}
+      <section id="how-it-works" class="mb-5" aria-labelledby="how-heading">
+        <h2 id="how-heading"
+            style="font-size:1.4rem; font-weight:800; color:var(--agg-primary);
+                   border-bottom:2px solid var(--agg-accent); padding-bottom:0.5rem;
+                   margin-bottom:1.25rem;">
+          How It Works
+        </h2>
+        <ol style="font-size:0.95rem; line-height:1.8;">
+          <li>
+            <strong>Select a compliance framework</strong> — choose the standard
+            that best aligns with your organisation's regulatory obligations
+            (NIST AI RMF, CMMC Level 2, Lloyd's Market, etc.).
+          </li>
+          <li>
+            <strong>Complete the questionnaire</strong> — answer categorised questions
+            about your AI system's data governance, model risk, operational security,
+            and compliance posture.
+          </li>
+          <li>
+            <strong>Review risk scores</strong> — the scoring engine maps your
+            responses to Low / Medium / High / Critical risk levels per category and
+            calculates an overall AI deployment risk score.
+          </li>
+          <li>
+            <strong>Download governance documents</strong> — receive a governance
+            checklist, SSP control entries, and a full AI use policy document,
+            downloadable as DOCX or PDF.
+          </li>
+        </ol>
+      </section>
+
+      {# --- Supported Frameworks --- #}
+      <section id="frameworks" class="mb-5" aria-labelledby="fw-heading">
+        <h2 id="fw-heading"
+            style="font-size:1.4rem; font-weight:800; color:var(--agg-primary);
+                   border-bottom:2px solid var(--agg-accent); padding-bottom:0.5rem;
+                   margin-bottom:1.25rem;">
+          Supported Compliance Frameworks
+        </h2>
+
+        {% for fw in frameworks %}
+        <div
+          id="{{ fw.id }}"
+          class="agg-card p-4 mb-3"
+          style="border-left:4px solid var(--agg-accent);"
+        >
+          <div class="d-flex align-items-start gap-3 flex-wrap">
+            <div class="flex-grow-1">
+              <div class="d-flex align-items-center gap-2 mb-1 flex-wrap">
+                <h3 style="font-size:1rem; font-weight:700; color:var(--agg-primary); margin:0;">
+                  {{ fw.full_name | e }}
+                </h3>
+                <span
+                  style="background:var(--agg-accent-light); color:var(--agg-primary);
+                         font-size:0.68rem; font-weight:700; padding:2px 8px;
+                         border-radius:3px; text-transform:uppercase; letter-spacing:0.07em;"
+                >
+                  {{ fw.version | e }}
+                </span>
+              </div>
+              <p style="font-size:0.875rem; color:var(--agg-text-muted); margin-bottom:0.5rem; line-height:1.6;">
+                {{ fw.description | e }}
+              </p>
+              <div class="d-flex flex-wrap gap-1">
+                {% for ctx in fw.contexts %}
+                <span
+                  style="display:inline-block; background:var(--agg-bg); color:var(--agg-text-muted);
+                         font-size:0.7rem; font-weight:600; padding:1px 8px;
+                         border-radius:1rem; border:1px solid var(--agg-border);"
+                >
+                  {{ ctx | replace('_', ' ') | title }}
+                </span>
+                {% endfor %}
+              </div>
+            </div>
+            <div style="flex-shrink:0;">
+              <a
+                href="{{ url_for('main.questionnaire') }}"
+                class="btn btn-sm btn-agg-primary"
+                aria-label="Start assessment with {{ fw.label }} framework"
+              >
+                <i class="bi bi-play-fill me-1" aria-hidden="true"></i>
+                Use Framework
+              </a>
+            </div>
+          </div>
+        </div>
+        {% endfor %}
+
+      </section>
+
+      {# --- Assessment Categories --- #}
+      <section id="categories" class="mb-5" aria-labelledby="cat-heading">
+        <h2 id="cat-heading"
+            style="font-size:1.4rem; font-weight:800; color:var(--agg-primary);
+                   border-bottom:2px solid var(--agg-accent); padding-bottom:0.5rem;
+                   margin-bottom:1.25rem;">
+          Assessment Categories
+        </h2>
+        <p style="font-size:0.9rem; color:var(--agg-text-muted); margin-bottom:1.25rem;">
+          The questionnaire covers four risk categories, each containing multiple
+          questions weighted by their importance to the overall risk posture.
+        </p>
+        <div class="row g-3">
+          {% set cat_icons = {'data': 'database', 'model': 'cpu', 'ops': 'shield-lock', 'compliance': 'clipboard-check'} %}
+          {% set cat_colours = {'data': '#0d6efd', 'model': '#6610f2', 'ops': '#dc3545', 'compliance': '#198754'} %}
+          {% for cat in categories %}
+          <div class="col-12 col-sm-6">
+            <div class="agg-card p-3 h-100">
+              <div class="d-flex align-items-center gap-2 mb-2">
+                <span
+                  style="display:inline-flex; align-items:center; justify-content:center;
+                         width:36px; height:36px; border-radius:0.4rem;
+                         background:var(--agg-accent-light); font-size:1.15rem;
+                         color:{{ cat_colours.get(cat.id, 'var(--agg-primary)') }};"
+                  aria-hidden="true"
+                >
+                  <i class="bi bi-{{ cat_icons.get(cat.id, 'question-circle') }}"></i>
+                </span>
+                <h3 style="font-size:0.95rem; font-weight:700; color:var(--agg-primary); margin:0;">
+                  {{ cat.label | e }}
+                </h3>
+              </div>
+              <p style="font-size:0.83rem; color:var(--agg-text-muted); margin:0; line-height:1.55;">
+                {{ cat.description | e }}
+              </p>
+            </div>
+          </div>
+          {% endfor %}
+        </div>
+      </section>
+
+      {# --- Generated Outputs --- #}
+      <section id="outputs" class="mb-5" aria-labelledby="outputs-heading">
+        <h2 id="outputs-heading"
+            style="font-size:1.4rem; font-weight:800; color:var(--agg-primary);
+                   border-bottom:2px solid var(--agg-accent); padding-bottom:0.5rem;
+                   margin-bottom:1.25rem;">
+          Generated Outputs
+        </h2>
+        <div class="row g-3">
+
+          <div class="col-12 col-md-4">
+            <div class="agg-card p-3 h-100 text-center">
+              <i class="bi bi-list-check" style="font-size:2rem; color:var(--agg-primary); margin-bottom:0.5rem; display:block;" aria-hidden="true"></i>
+              <h4 style="font-size:0.92rem; font-weight:700; color:var(--agg-primary); margin-bottom:0.4rem;">Governance Checklist</h4>
+              <p style="font-size:0.8rem; color:var(--agg-text-muted); margin:0;">
+                Prioritised control actions mapped to framework references,
+                ordered by severity (Critical first).
+              </p>
+            </div>
+          </div>
+
+          <div class="col-12 col-md-4">
+            <div class="agg-card p-3 h-100 text-center">
+              <i class="bi bi-file-text" style="font-size:2rem; color:var(--agg-primary); margin-bottom:0.5rem; display:block;" aria-hidden="true"></i>
+              <h4 style="font-size:0.92rem; font-weight:700; color:var(--agg-primary); margin-bottom:0.4rem;">SSP Control Entries</h4>
+              <p style="font-size:0.8rem; color:var(--agg-text-muted); margin:0;">
+                System Security Plan entries with implementation status,
+                findings, and remediation actions.
+              </p>
+            </div>
+          </div>
+
+          <div class="col-12 col-md-4">
+            <div class="agg-card p-3 h-100 text-center">
+              <i class="bi bi-journal-text" style="font-size:2rem; color:var(--agg-primary); margin-bottom:0.5rem; display:block;" aria-hidden="true"></i>
+              <h4 style="font-size:0.92rem; font-weight:700; color:var(--agg-primary); margin-bottom:0.4rem;">AI Use Policy</h4>
+              <p style="font-size:0.8rem; color:var(--agg-text-muted); margin:0;">
+                Full 11-section policy document tailored with your system
+                details and risk findings.
+              </p>
+            </div>
+          </div>
+
+        </div>
+
+        <div class="row g-3 mt-1">
+          <div class="col-12 col-md-6">
+            <div class="agg-card p-3 h-100 d-flex align-items-center gap-3">
+              <i class="bi bi-file-earmark-word" style="font-size:2.5rem; color:#2b579a;" aria-hidden="true"></i>
+              <div>
+                <h4 style="font-size:0.92rem; font-weight:700; color:var(--agg-primary); margin-bottom:0.2rem;">DOCX Export</h4>
+                <p style="font-size:0.8rem; color:var(--agg-text-muted); margin:0;">Fully formatted, editable Word document with tables, cover page, and signature blocks.</p>
+              </div>
+            </div>
+          </div>
+          <div class="col-12 col-md-6">
+            <div class="agg-card p-3 h-100 d-flex align-items-center gap-3">
+              <i class="bi bi-file-earmark-pdf" style="font-size:2.5rem; color:#dc3545;" aria-hidden="true"></i>
+              <div>
+                <h4 style="font-size:0.92rem; font-weight:700; color:var(--agg-primary); margin-bottom:0.2rem;">PDF Export</h4>
+                <p style="font-size:0.8rem; color:var(--agg-text-muted); margin:0;">Print-ready PDF with professional layout, page headers/footers, and bookmarks.</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </section>
+
+      {# --- Disclaimer --- #}
+      <section id="disclaimer" class="mb-4" aria-labelledby="disclaimer-heading">
+        <h2 id="disclaimer-heading"
+            style="font-size:1.4rem; font-weight:800; color:var(--agg-primary);
+                   border-bottom:2px solid var(--agg-accent); padding-bottom:0.5rem;
+                   margin-bottom:1.25rem;">
+          Disclaimer
+        </h2>
+        <div
+          class="p-4 rounded"
+          style="background:#f8d7da; border:1px solid #f1aeb5; border-left:4px solid var(--agg-risk-high);"
+          role="note"
+        >
+          <p style="font-size:0.875rem; color:#58151c; margin:0; line-height:1.7;">
+            <strong>Important:</strong>
+            AI Gov Gen generates governance documentation automatically based on
+            questionnaire responses provided by the system owner.
+            The generated documents are intended as a <strong>starting point</strong>
+            for governance programmes and do not constitute legal, regulatory, or
+            professional compliance advice.
+            The organisation using these documents is solely responsible for ensuring
+            that its AI systems comply with all applicable laws, regulations, and
+            contractual obligations.
+            All generated documents must be reviewed, validated, and approved by
+            qualified compliance, legal, and/or security professionals before formal
+            adoption or submission to any regulatory body or auditor.
+          </p>
+        </div>
+      </section>
+
+      {# --- CTA --- #}
+      <div class="text-center py-3">
+        <a
+          href="{{ url_for('main.questionnaire') }}"
+          class="btn btn-agg-primary btn-lg d-inline-flex align-items-center gap-2"
+        >
+          <i class="bi bi-play-circle-fill" aria-hidden="true"></i>
+          Start Your Assessment
+        </a>
+      </div>
+
+    </div>{# /col main #}
+  </div>{# /row #}
+</div>{# /container #}
+
+{% endblock %}

@@ -1,0 +1,191 @@
+{% extends 'base.html' %}
+{#
+  ai_gov_gen/templates/error.html
+
+  Generic HTTP error page template.
+  Extends base.html so the navbar and footer are always shown.
+
+  Context variables:
+    error_code    — HTTP status code integer (e.g. 404)
+    error_title   — Short error title string
+    error_message — Descriptive message for the user
+    title         — Page <title> string
+#}
+
+{% block title_tag %}{{ title }} — AI Gov Gen{% endblock %}
+
+{% block body_class %}error-page{% endblock %}
+
+{% block content %}
+<div
+  style="
+    min-height: 60vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 3rem 1rem;
+    background: var(--agg-bg);
+  "
+>
+  <div
+    class="text-center"
+    style="max-width: 520px; width: 100%;"
+    role="main"
+    aria-labelledby="error-heading"
+  >
+
+    {# Large error code number #}
+    <div
+      style="
+        font-size: clamp(5rem, 18vw, 9rem);
+        font-weight: 900;
+        line-height: 1;
+        color: var(--agg-primary);
+        opacity: 0.12;
+        margin-bottom: -1rem;
+        user-select: none;
+        letter-spacing: -0.03em;
+      "
+      aria-hidden="true"
+    >
+      {{ error_code }}
+    </div>
+
+    {# Icon #}
+    <div style="margin-bottom: 1.25rem;">
+      {% if error_code == 404 %}
+        <i
+          class="bi bi-search"
+          style="font-size: 3.5rem; color: var(--agg-primary);"
+          aria-hidden="true"
+        ></i>
+      {% elif error_code == 500 %}
+        <i
+          class="bi bi-exclamation-octagon-fill"
+          style="font-size: 3.5rem; color: var(--agg-risk-high);"
+          aria-hidden="true"
+        ></i>
+      {% elif error_code == 403 %}
+        <i
+          class="bi bi-lock-fill"
+          style="font-size: 3.5rem; color: var(--agg-risk-medium);"
+          aria-hidden="true"
+        ></i>
+      {% elif error_code == 413 %}
+        <i
+          class="bi bi-file-earmark-x-fill"
+          style="font-size: 3.5rem; color: var(--agg-risk-medium);"
+          aria-hidden="true"
+        ></i>
+      {% else %}
+        <i
+          class="bi bi-exclamation-triangle-fill"
+          style="font-size: 3.5rem; color: var(--agg-risk-medium);"
+          aria-hidden="true"
+        ></i>
+      {% endif %}
+    </div>
+
+    {# Error title #}
+    <h1
+      id="error-heading"
+      style="
+        font-size: 1.6rem;
+        font-weight: 700;
+        color: var(--agg-primary);
+        margin-bottom: 0.75rem;
+      "
+    >
+      {{ error_title | e }}
+    </h1>
+
+    {# HTTP code badge #}
+    <p style="margin-bottom: 0.75rem;">
+      <span
+        style="
+          display: inline-block;
+          background: var(--agg-primary);
+          color: #ffffff;
+          font-size: 0.72rem;
+          font-weight: 700;
+          padding: 2px 10px;
+          border-radius: 1rem;
+          letter-spacing: 0.08em;
+          text-transform: uppercase;
+        "
+      >
+        HTTP {{ error_code }}
+      </span>
+    </p>
+
+    {# Error message #}
+    <p
+      style="
+        font-size: 0.95rem;
+        color: var(--agg-text-muted);
+        line-height: 1.65;
+        margin-bottom: 2rem;
+        max-width: 40ch;
+        margin-left: auto;
+        margin-right: auto;
+      "
+    >
+      {{ error_message | e }}
+    </p>
+
+    {# Action buttons #}
+    <div class="d-flex flex-wrap gap-3 justify-content-center">
+
+      <a
+        href="{{ url_for('main.index') }}"
+        class="btn btn-agg-primary d-inline-flex align-items-center gap-2"
+        style="font-size: 0.92rem;"
+      >
+        <i class="bi bi-house-door" aria-hidden="true"></i>
+        Return to Home
+      </a>
+
+      {% if error_code in (404, 500, 503) %}
+      <a
+        href="{{ url_for('main.questionnaire') }}"
+        class="btn btn-agg-secondary d-inline-flex align-items-center gap-2"
+        style="font-size: 0.92rem;"
+      >
+        <i class="bi bi-clipboard-check" aria-hidden="true"></i>
+        Start Assessment
+      </a>
+      {% endif %}
+
+      {% if error_code == 500 %}
+      <button
+        type="button"
+        class="btn btn-outline-secondary d-inline-flex align-items-center gap-2"
+        style="font-size: 0.92rem;"
+        onclick="window.location.reload();"
+        aria-label="Reload the page"
+      >
+        <i class="bi bi-arrow-clockwise" aria-hidden="true"></i>
+        Try Again
+      </button>
+      {% endif %}
+
+    </div>{# /buttons #}
+
+    {# Support hint for 500 errors #}
+    {% if error_code == 500 %}
+    <p
+      style="
+        margin-top: 2rem;
+        font-size: 0.78rem;
+        color: var(--agg-text-muted);
+      "
+    >
+      <i class="bi bi-info-circle me-1" aria-hidden="true"></i>
+      If this error persists, check the application logs or contact your
+      system administrator.
+    </p>
+    {% endif %}
+
+  </div>{# /text-center #}
+</div>{# /flex wrapper #}
+{% endblock %}
