@@ -1,0 +1,1353 @@
+<!DOCTYPE html>
+{#
+  ai_gov_gen/templates/base.html
+
+  Base Jinja2 HTML template with Bootstrap 5 layout, navigation, and common
+  styles.  All other templates extend this base via {% extends 'base.html' %}.
+
+  Blocks available to child templates:
+    title_tag     — contents of <title> (plain text, no markup)
+    head_extra    — additional <link> / <script> tags in <head>
+    body_class    — extra CSS classes on <body>
+    navbar_brand  — override the navbar brand content
+    navbar_extra  — additional navbar items / buttons
+    flash_messages— override flash message rendering
+    content       — main page content (required)
+    footer_extra  — additional footer content
+    scripts       — page-specific <script> blocks at end of <body>
+#}
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="AI Gov Gen — AI governance document generator guided by structured risk assessment questionnaires aligned with HKS AI Risk Framework and NIST AI RMF." />
+  <meta name="robots" content="noindex, nofollow" />
+
+  <!-- ================================================================
+       TITLE
+       ================================================================ -->
+  <title>
+    {% block title_tag %}
+      {% if title is defined and title %}{{ title }} — AI Gov Gen{% else %}AI Gov Gen{% endif %}
+    {% endblock %}
+  </title>
+
+  <!-- ================================================================
+       BOOTSTRAP 5 CSS (CDN with SRI)
+       ================================================================ -->
+  <link
+    rel="stylesheet"
+    href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css"
+    integrity="sha384-T3c6CoIi6uLrA9TneNEoa7RxnatzjcDSCmG1MXxSR1GAsXEV/Dwwykc2MPK8M2HN"
+    crossorigin="anonymous"
+  />
+
+  <!-- Bootstrap Icons -->
+  <link
+    rel="stylesheet"
+    href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css"
+  />
+
+  <!-- ================================================================
+       CUSTOM APPLICATION STYLES
+       ================================================================ -->
+  <style>
+    /* ----------------------------------------------------------------
+       CSS CUSTOM PROPERTIES (design tokens)
+       ---------------------------------------------------------------- */
+    :root {
+      --agg-primary:         #1a3a5c;
+      --agg-primary-dark:    #122840;
+      --agg-primary-light:   #2e6da4;
+      --agg-accent:          #4a9fd4;
+      --agg-accent-light:    #d0eaf8;
+
+      /* Risk level colours */
+      --agg-risk-low:        #198754;
+      --agg-risk-medium:     #fd7e14;
+      --agg-risk-high:       #dc3545;
+      --agg-risk-critical:   #212529;
+
+      --agg-risk-low-bg:     #d1e7dd;
+      --agg-risk-medium-bg:  #fff3cd;
+      --agg-risk-high-bg:    #f8d7da;
+      --agg-risk-critical-bg:#d3d3d3;
+
+      /* Neutral palette */
+      --agg-bg:              #f8f9fa;
+      --agg-surface:         #ffffff;
+      --agg-border:          #dee2e6;
+      --agg-text:            #212529;
+      --agg-text-muted:      #6c757d;
+
+      /* Navbar */
+      --agg-navbar-bg:       #1a3a5c;
+      --agg-navbar-text:     rgba(255, 255, 255, 0.9);
+      --agg-navbar-hover:    rgba(255, 255, 255, 1);
+
+      /* Spacing */
+      --agg-radius:          0.5rem;
+      --agg-shadow:          0 2px 8px rgba(0, 0, 0, 0.08);
+      --agg-shadow-lg:       0 4px 24px rgba(0, 0, 0, 0.12);
+    }
+
+    /* ----------------------------------------------------------------
+       BASE
+       ---------------------------------------------------------------- */
+    html {
+      scroll-behavior: smooth;
+    }
+
+    body {
+      font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+      background-color: var(--agg-bg);
+      color: var(--agg-text);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    main {
+      flex: 1 0 auto;
+    }
+
+    /* ----------------------------------------------------------------
+       NAVBAR
+       ---------------------------------------------------------------- */
+    .agg-navbar {
+      background-color: var(--agg-navbar-bg) !important;
+      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.18);
+      padding-top: 0.6rem;
+      padding-bottom: 0.6rem;
+    }
+
+    .agg-navbar .navbar-brand {
+      font-weight: 700;
+      font-size: 1.25rem;
+      letter-spacing: 0.02em;
+      color: #ffffff !important;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .agg-navbar .navbar-brand .brand-badge {
+      display: inline-block;
+      background: var(--agg-accent);
+      color: #ffffff;
+      font-size: 0.6rem;
+      font-weight: 700;
+      padding: 1px 6px;
+      border-radius: 3px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      vertical-align: middle;
+      margin-left: 2px;
+    }
+
+    .agg-navbar .nav-link {
+      color: var(--agg-navbar-text) !important;
+      font-size: 0.9rem;
+      font-weight: 500;
+      padding: 0.4rem 0.75rem !important;
+      border-radius: 0.375rem;
+      transition: background-color 0.15s ease, color 0.15s ease;
+    }
+
+    .agg-navbar .nav-link:hover,
+    .agg-navbar .nav-link:focus {
+      color: var(--agg-navbar-hover) !important;
+      background-color: rgba(255, 255, 255, 0.12);
+    }
+
+    .agg-navbar .nav-link.active {
+      color: #ffffff !important;
+      background-color: rgba(255, 255, 255, 0.18);
+      font-weight: 600;
+    }
+
+    .agg-navbar .navbar-toggler {
+      border-color: rgba(255, 255, 255, 0.3);
+    }
+
+    .agg-navbar .navbar-toggler-icon {
+      background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 30 30'%3e%3cpath stroke='rgba%28255, 255, 255, 0.8%29' stroke-linecap='round' stroke-miterlimit='10' stroke-width='2' d='M4 7h22M4 15h22M4 23h22'/%3e%3c/svg%3e");
+    }
+
+    .agg-navbar .dropdown-menu {
+      background-color: var(--agg-primary-dark);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: var(--agg-radius);
+      margin-top: 0.25rem;
+      box-shadow: var(--agg-shadow-lg);
+    }
+
+    .agg-navbar .dropdown-item {
+      color: var(--agg-navbar-text);
+      font-size: 0.875rem;
+      padding: 0.4rem 1rem;
+    }
+
+    .agg-navbar .dropdown-item:hover {
+      background-color: rgba(255, 255, 255, 0.12);
+      color: #ffffff;
+    }
+
+    /* Assessment progress indicator in navbar */
+    .agg-navbar .assessment-progress-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+      background: rgba(255, 255, 255, 0.12);
+      color: rgba(255, 255, 255, 0.9);
+      font-size: 0.78rem;
+      font-weight: 600;
+      padding: 0.25rem 0.65rem;
+      border-radius: 1rem;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      text-decoration: none;
+      transition: background-color 0.15s;
+    }
+
+    .agg-navbar .assessment-progress-pill:hover {
+      background: rgba(255, 255, 255, 0.2);
+      color: #ffffff;
+    }
+
+    .agg-navbar .assessment-progress-pill .dot {
+      display: inline-block;
+      width: 8px;
+      height: 8px;
+      background: #4ade80;
+      border-radius: 50%;
+      animation: pulse-green 2s ease infinite;
+    }
+
+    @keyframes pulse-green {
+      0%, 100% { opacity: 1; }
+      50%       { opacity: 0.4; }
+    }
+
+    /* ----------------------------------------------------------------
+       FLASH MESSAGES
+       ---------------------------------------------------------------- */
+    .agg-flash-container {
+      position: sticky;
+      top: 0;
+      z-index: 1040;
+    }
+
+    .agg-flash-container .alert {
+      border-radius: 0;
+      border-left: 0;
+      border-right: 0;
+      border-top: 0;
+      margin-bottom: 0;
+      font-size: 0.9rem;
+      font-weight: 500;
+    }
+
+    /* ----------------------------------------------------------------
+       PAGE HEADER
+       ---------------------------------------------------------------- */
+    .agg-page-header {
+      background: linear-gradient(135deg, var(--agg-primary) 0%, var(--agg-primary-light) 100%);
+      color: #ffffff;
+      padding: 3rem 0 2.5rem;
+      margin-bottom: 2rem;
+    }
+
+    .agg-page-header h1 {
+      font-weight: 700;
+      font-size: clamp(1.5rem, 4vw, 2.25rem);
+      line-height: 1.2;
+      margin-bottom: 0.5rem;
+    }
+
+    .agg-page-header .lead {
+      color: rgba(255, 255, 255, 0.85);
+      font-size: 1.05rem;
+      max-width: 60ch;
+    }
+
+    .agg-page-header .breadcrumb {
+      background: transparent;
+      padding: 0;
+      margin-bottom: 0.75rem;
+    }
+
+    .agg-page-header .breadcrumb-item,
+    .agg-page-header .breadcrumb-item a {
+      color: rgba(255, 255, 255, 0.7);
+      font-size: 0.85rem;
+      text-decoration: none;
+    }
+
+    .agg-page-header .breadcrumb-item a:hover {
+      color: rgba(255, 255, 255, 1);
+    }
+
+    .agg-page-header .breadcrumb-item.active {
+      color: rgba(255, 255, 255, 0.9);
+    }
+
+    .agg-page-header .breadcrumb-item + .breadcrumb-item::before {
+      color: rgba(255, 255, 255, 0.4);
+    }
+
+    /* ----------------------------------------------------------------
+       CARDS
+       ---------------------------------------------------------------- */
+    .agg-card {
+      background: var(--agg-surface);
+      border: 1px solid var(--agg-border);
+      border-radius: var(--agg-radius);
+      box-shadow: var(--agg-shadow);
+      transition: box-shadow 0.2s ease;
+    }
+
+    .agg-card:hover {
+      box-shadow: var(--agg-shadow-lg);
+    }
+
+    .agg-card .card-header {
+      background: var(--agg-primary);
+      color: #ffffff;
+      border-radius: calc(var(--agg-radius) - 1px) calc(var(--agg-radius) - 1px) 0 0 !important;
+      font-weight: 600;
+      font-size: 0.95rem;
+      padding: 0.85rem 1.25rem;
+    }
+
+    /* ----------------------------------------------------------------
+       RISK LEVEL BADGES
+       ---------------------------------------------------------------- */
+    .risk-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.3rem;
+      padding: 0.2rem 0.7rem;
+      border-radius: 2rem;
+      font-size: 0.75rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      white-space: nowrap;
+    }
+
+    .risk-badge-low {
+      background: var(--agg-risk-low-bg);
+      color: #0a3622;
+      border: 1px solid #a3cfbb;
+    }
+
+    .risk-badge-medium {
+      background: var(--agg-risk-medium-bg);
+      color: #664d03;
+      border: 1px solid #ffe69c;
+    }
+
+    .risk-badge-high {
+      background: var(--agg-risk-high-bg);
+      color: #58151c;
+      border: 1px solid #f1aeb5;
+    }
+
+    .risk-badge-critical {
+      background: var(--agg-risk-critical-bg);
+      color: #ffffff;
+      border: 1px solid #999;
+    }
+
+    /* Bootstrap colour overrides for risk levels */
+    .bg-risk-low      { background-color: var(--agg-risk-low)      !important; color: #fff !important; }
+    .bg-risk-medium   { background-color: var(--agg-risk-medium)   !important; color: #fff !important; }
+    .bg-risk-high     { background-color: var(--agg-risk-high)     !important; color: #fff !important; }
+    .bg-risk-critical { background-color: var(--agg-risk-critical) !important; color: #fff !important; }
+
+    /* ----------------------------------------------------------------
+       RISK SCORE GAUGE / PROGRESS
+       ---------------------------------------------------------------- */
+    .risk-score-display {
+      text-align: center;
+      padding: 1.5rem 1rem;
+    }
+
+    .risk-score-number {
+      font-size: 3.5rem;
+      font-weight: 800;
+      line-height: 1;
+      color: var(--agg-primary);
+    }
+
+    .risk-score-label {
+      font-size: 0.8rem;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--agg-text-muted);
+      margin-top: 0.25rem;
+    }
+
+    .risk-progress-bar {
+      height: 12px;
+      border-radius: 6px;
+      background: var(--agg-border);
+      overflow: hidden;
+    }
+
+    .risk-progress-fill {
+      height: 100%;
+      border-radius: 6px;
+      transition: width 0.6s ease;
+    }
+
+    .risk-progress-fill.level-low      { background: var(--agg-risk-low); }
+    .risk-progress-fill.level-medium   { background: var(--agg-risk-medium); }
+    .risk-progress-fill.level-high     { background: var(--agg-risk-high); }
+    .risk-progress-fill.level-critical { background: var(--agg-risk-critical); }
+
+    /* ----------------------------------------------------------------
+       WIZARD STEP INDICATOR
+       ---------------------------------------------------------------- */
+    .wizard-steps {
+      display: flex;
+      align-items: center;
+      overflow-x: auto;
+      gap: 0;
+      padding: 1rem 0;
+      margin-bottom: 0;
+      scrollbar-width: none;
+    }
+
+    .wizard-steps::-webkit-scrollbar { display: none; }
+
+    .wizard-step-item {
+      display: flex;
+      align-items: center;
+      flex-shrink: 0;
+    }
+
+    .wizard-step-btn {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.4rem 0.75rem;
+      border-radius: 2rem;
+      font-size: 0.82rem;
+      font-weight: 600;
+      text-decoration: none;
+      white-space: nowrap;
+      transition: all 0.15s ease;
+      border: 2px solid transparent;
+      color: var(--agg-text-muted);
+      background: transparent;
+    }
+
+    .wizard-step-btn .step-num {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      font-size: 0.75rem;
+      font-weight: 700;
+      background: var(--agg-border);
+      color: var(--agg-text-muted);
+      flex-shrink: 0;
+    }
+
+    .wizard-step-btn.step-completed {
+      color: var(--agg-risk-low);
+    }
+
+    .wizard-step-btn.step-completed .step-num {
+      background: var(--agg-risk-low);
+      color: #ffffff;
+    }
+
+    .wizard-step-btn.step-active {
+      color: var(--agg-primary);
+      background: var(--agg-accent-light);
+      border-color: var(--agg-accent);
+    }
+
+    .wizard-step-btn.step-active .step-num {
+      background: var(--agg-primary);
+      color: #ffffff;
+    }
+
+    .wizard-step-connector {
+      flex: 0 0 1.5rem;
+      height: 2px;
+      background: var(--agg-border);
+      margin: 0 -0.1rem;
+    }
+
+    .wizard-step-connector.connector-done {
+      background: var(--agg-risk-low);
+    }
+
+    /* ----------------------------------------------------------------
+       QUESTION FORM ELEMENTS
+       ---------------------------------------------------------------- */
+    .question-block {
+      background: var(--agg-surface);
+      border: 1px solid var(--agg-border);
+      border-radius: var(--agg-radius);
+      padding: 1.5rem;
+      margin-bottom: 1.25rem;
+      transition: border-color 0.15s ease, box-shadow 0.15s ease;
+    }
+
+    .question-block:focus-within {
+      border-color: var(--agg-accent);
+      box-shadow: 0 0 0 3px rgba(74, 159, 212, 0.15);
+    }
+
+    .question-block .question-text {
+      font-size: 0.975rem;
+      font-weight: 600;
+      color: var(--agg-text);
+      margin-bottom: 0.35rem;
+      line-height: 1.45;
+    }
+
+    .question-block .question-help {
+      font-size: 0.83rem;
+      color: var(--agg-text-muted);
+      margin-bottom: 1rem;
+      line-height: 1.5;
+    }
+
+    .question-block .question-required {
+      color: var(--agg-risk-high);
+      font-weight: 700;
+      margin-left: 2px;
+    }
+
+    .question-block .form-check {
+      padding-left: 2rem;
+      margin-bottom: 0.4rem;
+    }
+
+    .question-block .form-check-input {
+      margin-left: -2rem;
+      width: 1.15em;
+      height: 1.15em;
+      cursor: pointer;
+      border-color: var(--agg-primary-light);
+    }
+
+    .question-block .form-check-input:checked {
+      background-color: var(--agg-primary);
+      border-color: var(--agg-primary);
+    }
+
+    .question-block .form-check-label {
+      font-size: 0.9rem;
+      cursor: pointer;
+    }
+
+    .question-block .form-control,
+    .question-block .form-select {
+      border-color: var(--agg-border);
+      font-size: 0.9rem;
+      border-radius: 0.375rem;
+    }
+
+    .question-block .form-control:focus,
+    .question-block .form-select:focus {
+      border-color: var(--agg-accent);
+      box-shadow: 0 0 0 3px rgba(74, 159, 212, 0.2);
+    }
+
+    .question-nist-tag {
+      display: inline-block;
+      font-size: 0.68rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.07em;
+      padding: 1px 6px;
+      border-radius: 3px;
+      background: var(--agg-accent-light);
+      color: var(--agg-primary);
+      margin-bottom: 0.5rem;
+    }
+
+    /* ----------------------------------------------------------------
+       BUTTONS
+       ---------------------------------------------------------------- */
+    .btn-agg-primary {
+      background-color: var(--agg-primary);
+      border-color: var(--agg-primary);
+      color: #ffffff;
+      font-weight: 600;
+      padding: 0.55rem 1.5rem;
+      border-radius: 0.4rem;
+      transition: background-color 0.15s ease, box-shadow 0.15s ease;
+    }
+
+    .btn-agg-primary:hover,
+    .btn-agg-primary:focus {
+      background-color: var(--agg-primary-dark);
+      border-color: var(--agg-primary-dark);
+      color: #ffffff;
+      box-shadow: 0 2px 8px rgba(26, 58, 92, 0.35);
+    }
+
+    .btn-agg-secondary {
+      background-color: transparent;
+      border-color: var(--agg-primary);
+      color: var(--agg-primary);
+      font-weight: 600;
+      padding: 0.55rem 1.5rem;
+      border-radius: 0.4rem;
+      transition: background-color 0.15s ease;
+    }
+
+    .btn-agg-secondary:hover {
+      background-color: var(--agg-accent-light);
+      color: var(--agg-primary);
+    }
+
+    .btn-download {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+      font-weight: 600;
+      padding: 0.6rem 1.25rem;
+      border-radius: 0.4rem;
+    }
+
+    /* ----------------------------------------------------------------
+       FRAMEWORK SELECTOR CARDS (landing page)
+       ---------------------------------------------------------------- */
+    .framework-card {
+      border: 2px solid var(--agg-border);
+      border-radius: var(--agg-radius);
+      padding: 1.25rem;
+      cursor: pointer;
+      transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.15s ease;
+      background: var(--agg-surface);
+      height: 100%;
+    }
+
+    .framework-card:hover {
+      border-color: var(--agg-accent);
+      box-shadow: var(--agg-shadow-lg);
+      transform: translateY(-2px);
+    }
+
+    .framework-card.selected {
+      border-color: var(--agg-primary);
+      box-shadow: 0 0 0 3px rgba(26, 58, 92, 0.15);
+    }
+
+    .framework-card .fw-icon {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 40px;
+      height: 40px;
+      background: var(--agg-accent-light);
+      color: var(--agg-primary);
+      border-radius: 0.5rem;
+      font-size: 1.25rem;
+      margin-bottom: 0.75rem;
+    }
+
+    .framework-card h5 {
+      font-size: 0.95rem;
+      font-weight: 700;
+      color: var(--agg-primary);
+      margin-bottom: 0.4rem;
+    }
+
+    .framework-card p {
+      font-size: 0.82rem;
+      color: var(--agg-text-muted);
+      line-height: 1.5;
+      margin-bottom: 0;
+    }
+
+    /* ----------------------------------------------------------------
+       RESULTS PAGE — CATEGORY SCORE CARDS
+       ---------------------------------------------------------------- */
+    .category-score-card {
+      background: var(--agg-surface);
+      border: 1px solid var(--agg-border);
+      border-radius: var(--agg-radius);
+      padding: 1.25rem;
+      height: 100%;
+    }
+
+    .category-score-card .cat-icon {
+      font-size: 1.75rem;
+      margin-bottom: 0.5rem;
+    }
+
+    .category-score-card .cat-label {
+      font-size: 0.82rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.07em;
+      color: var(--agg-text-muted);
+      margin-bottom: 0.25rem;
+    }
+
+    .category-score-card .cat-score {
+      font-size: 2.25rem;
+      font-weight: 800;
+      color: var(--agg-primary);
+      line-height: 1;
+      margin-bottom: 0.35rem;
+    }
+
+    /* ----------------------------------------------------------------
+       CHECKLIST TABLE
+       ---------------------------------------------------------------- */
+    .checklist-table th {
+      font-size: 0.8rem;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--agg-text-muted);
+      font-weight: 700;
+      border-bottom-width: 2px;
+      white-space: nowrap;
+    }
+
+    .checklist-table td {
+      font-size: 0.875rem;
+      vertical-align: top;
+    }
+
+    .checklist-table .control-ref {
+      font-family: 'Consolas', 'Courier New', monospace;
+      font-size: 0.75rem;
+      color: var(--agg-primary-light);
+    }
+
+    .checklist-table .action-text {
+      font-weight: 600;
+    }
+
+    .checklist-table .rationale-text {
+      font-size: 0.8rem;
+      color: var(--agg-text-muted);
+    }
+
+    /* ----------------------------------------------------------------
+       SSP ENTRY CARDS
+       ---------------------------------------------------------------- */
+    .ssp-entry-card {
+      border: 1px solid var(--agg-border);
+      border-radius: var(--agg-radius);
+      margin-bottom: 1rem;
+      overflow: hidden;
+    }
+
+    .ssp-entry-card .ssp-entry-header {
+      background: var(--agg-primary);
+      color: #ffffff;
+      padding: 0.65rem 1rem;
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      flex-wrap: wrap;
+    }
+
+    .ssp-entry-card .ssp-entry-id {
+      font-family: 'Consolas', 'Courier New', monospace;
+      font-size: 0.78rem;
+      color: rgba(255, 255, 255, 0.65);
+    }
+
+    .ssp-entry-card .ssp-entry-name {
+      font-size: 0.95rem;
+      font-weight: 700;
+      flex: 1;
+    }
+
+    .ssp-entry-card .ssp-entry-body {
+      padding: 1rem;
+    }
+
+    .ssp-field-label {
+      font-size: 0.72rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.07em;
+      color: var(--agg-text-muted);
+      margin-bottom: 0.15rem;
+    }
+
+    .ssp-field-value {
+      font-size: 0.875rem;
+      margin-bottom: 0.75rem;
+    }
+
+    /* ----------------------------------------------------------------
+       FOOTER
+       ---------------------------------------------------------------- */
+    .agg-footer {
+      background-color: var(--agg-primary);
+      color: rgba(255, 255, 255, 0.75);
+      padding: 2rem 0 1.5rem;
+      margin-top: auto;
+      flex-shrink: 0;
+      font-size: 0.85rem;
+    }
+
+    .agg-footer a {
+      color: rgba(255, 255, 255, 0.7);
+      text-decoration: none;
+      transition: color 0.15s;
+    }
+
+    .agg-footer a:hover {
+      color: #ffffff;
+    }
+
+    .agg-footer .footer-brand {
+      font-size: 1rem;
+      font-weight: 700;
+      color: #ffffff;
+      margin-bottom: 0.25rem;
+    }
+
+    .agg-footer .footer-tagline {
+      font-size: 0.8rem;
+      color: rgba(255, 255, 255, 0.55);
+    }
+
+    .agg-footer hr {
+      border-color: rgba(255, 255, 255, 0.15);
+    }
+
+    .agg-footer .footer-links {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+    }
+
+    .agg-footer .footer-links li {
+      margin-bottom: 0.3rem;
+    }
+
+    .agg-footer .footer-links li a {
+      font-size: 0.82rem;
+    }
+
+    .agg-footer .footer-legal {
+      font-size: 0.75rem;
+      color: rgba(255, 255, 255, 0.4);
+    }
+
+    /* ----------------------------------------------------------------
+       UTILITY CLASSES
+       ---------------------------------------------------------------- */
+    .text-primary-agg { color: var(--agg-primary) !important; }
+    .text-accent      { color: var(--agg-accent) !important; }
+
+    .border-primary-agg { border-color: var(--agg-primary) !important; }
+
+    .bg-primary-agg {
+      background-color: var(--agg-primary) !important;
+      color: #ffffff;
+    }
+
+    .section-divider {
+      height: 3px;
+      background: linear-gradient(90deg, var(--agg-primary) 0%, var(--agg-accent) 100%);
+      border: none;
+      border-radius: 2px;
+      margin: 2rem 0;
+    }
+
+    .icon-circle {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 48px;
+      height: 48px;
+      border-radius: 50%;
+      background: var(--agg-accent-light);
+      color: var(--agg-primary);
+      font-size: 1.4rem;
+      flex-shrink: 0;
+    }
+
+    /* Scrollable table wrapper */
+    .table-responsive-agg {
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+      border-radius: var(--agg-radius);
+      border: 1px solid var(--agg-border);
+    }
+
+    /* Skip to content link (accessibility) */
+    .skip-to-content {
+      position: absolute;
+      top: -9999px;
+      left: 0.5rem;
+      background: var(--agg-primary);
+      color: #ffffff;
+      padding: 0.5rem 1rem;
+      border-radius: 0 0 0.375rem 0.375rem;
+      font-weight: 600;
+      z-index: 9999;
+      text-decoration: none;
+    }
+
+    .skip-to-content:focus {
+      top: 0;
+    }
+
+    /* Print utilities */
+    @media print {
+      .agg-navbar, .agg-footer, .agg-flash-container,
+      .no-print, .btn-download { display: none !important; }
+      body { background: #fff; }
+    }
+
+    /* Reduced motion */
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after {
+        animation-duration: 0.01ms !important;
+        transition-duration: 0.01ms !important;
+      }
+    }
+  </style>
+
+  {% block head_extra %}{% endblock %}
+</head>
+
+<body class="{% block body_class %}{% endblock %}">
+
+  <!-- Skip to main content (accessibility) -->
+  <a class="skip-to-content" href="#main-content">Skip to main content</a>
+
+  <!-- ================================================================
+       NAVIGATION BAR
+       ================================================================ -->
+  <nav class="navbar navbar-expand-lg agg-navbar" aria-label="Main navigation">
+    <div class="container-xl">
+
+      <!-- Brand -->
+      <a class="navbar-brand" href="{{ url_for('main.index') }}">
+        {% block navbar_brand %}
+        <i class="bi bi-shield-check" aria-hidden="true"></i>
+        AI Gov Gen
+        <span class="brand-badge">Beta</span>
+        {% endblock %}
+      </a>
+
+      <!-- Mobile toggle -->
+      <button
+        class="navbar-toggler"
+        type="button"
+        data-bs-toggle="collapse"
+        data-bs-target="#navbarMain"
+        aria-controls="navbarMain"
+        aria-expanded="false"
+        aria-label="Toggle navigation"
+      >
+        <span class="navbar-toggler-icon"></span>
+      </button>
+
+      <!-- Nav links -->
+      <div class="collapse navbar-collapse" id="navbarMain">
+        <ul class="navbar-nav me-auto mb-2 mb-lg-0">
+
+          <li class="nav-item">
+            <a
+              class="nav-link{% if request.endpoint == 'main.index' %} active{% endif %}"
+              href="{{ url_for('main.index') }}"
+              {% if request.endpoint == 'main.index' %}aria-current="page"{% endif %}
+            >
+              <i class="bi bi-house-door" aria-hidden="true"></i>
+              Home
+            </a>
+          </li>
+
+          <li class="nav-item">
+            <a
+              class="nav-link{% if request.endpoint in ('main.questionnaire', 'main.questionnaire_submit') %} active{% endif %}"
+              href="{{ url_for('main.questionnaire') }}"
+              {% if request.endpoint in ('main.questionnaire', 'main.questionnaire_submit') %}aria-current="page"{% endif %}
+            >
+              <i class="bi bi-clipboard-check" aria-hidden="true"></i>
+              Assessment
+            </a>
+          </li>
+
+          {% if has_active_assessment %}
+          <li class="nav-item">
+            <a
+              class="nav-link{% if request.endpoint == 'main.results' %} active{% endif %}"
+              href="{{ url_for('main.results') }}"
+              {% if request.endpoint == 'main.results' %}aria-current="page"{% endif %}
+            >
+              <i class="bi bi-bar-chart" aria-hidden="true"></i>
+              Results
+            </a>
+          </li>
+          {% endif %}
+
+          <li class="nav-item dropdown">
+            <a
+              class="nav-link dropdown-toggle"
+              href="#"
+              id="frameworkDropdown"
+              role="button"
+              data-bs-toggle="dropdown"
+              aria-expanded="false"
+            >
+              <i class="bi bi-diagram-3" aria-hidden="true"></i>
+              Frameworks
+            </a>
+            <ul class="dropdown-menu" aria-labelledby="frameworkDropdown">
+              {% for fw in supported_frameworks %}
+              <li>
+                <a class="dropdown-item" href="{{ url_for('main.about') }}#{{ fw.id }}">
+                  {{ fw.label }}
+                </a>
+              </li>
+              {% endfor %}
+              <li><hr class="dropdown-divider" style="border-color: rgba(255,255,255,0.1);"></li>
+              <li>
+                <a class="dropdown-item" href="{{ url_for('main.about') }}">
+                  <i class="bi bi-info-circle me-1" aria-hidden="true"></i>
+                  About AI Gov Gen
+                </a>
+              </li>
+            </ul>
+          </li>
+
+        </ul>
+
+        <!-- Right-side nav items -->
+        <div class="d-flex align-items-center gap-2">
+
+          {% block navbar_extra %}{% endblock %}
+
+          {% if has_active_assessment %}
+          <!-- Active assessment indicator -->
+          <a
+            href="{{ url_for('main.results') }}"
+            class="assessment-progress-pill d-none d-lg-inline-flex"
+            title="Assessment in progress — click to view results"
+          >
+            <span class="dot" aria-hidden="true"></span>
+            Assessment in progress
+          </a>
+          <form
+            method="post"
+            action="{{ url_for('main.reset') }}"
+            class="d-inline"
+            onsubmit="return confirm('Clear the current assessment and start over?');"
+          >
+            <input type="hidden" name="csrf_token" value="" />
+            <button
+              type="submit"
+              class="btn btn-sm"
+              style="background: rgba(255,255,255,0.12); color: rgba(255,255,255,0.75); border: 1px solid rgba(255,255,255,0.2); font-size:0.78rem;"
+              title="Clear current assessment"
+            >
+              <i class="bi bi-arrow-counterclockwise" aria-hidden="true"></i>
+              <span class="d-none d-xl-inline">Reset</span>
+            </button>
+          </form>
+          {% else %}
+          <a
+            href="{{ url_for('main.questionnaire') }}"
+            class="btn btn-sm"
+            style="background: var(--agg-accent); color: #fff; font-weight:600; border:none; padding: 0.35rem 0.9rem;"
+          >
+            <i class="bi bi-play-fill" aria-hidden="true"></i>
+            Start Assessment
+          </a>
+          {% endif %}
+
+        </div>
+      </div><!-- /navbar-collapse -->
+    </div><!-- /container -->
+  </nav><!-- /navbar -->
+
+
+  <!-- ================================================================
+       FLASH MESSAGES
+       ================================================================ -->
+  {% block flash_messages %}
+  {% with messages = get_flashed_messages(with_categories=true) %}
+  {% if messages %}
+  <div class="agg-flash-container" role="alert" aria-live="polite">
+    {% for category, message in messages %}
+    <div
+      class="alert alert-{{ 'danger' if category == 'error' else category }} alert-dismissible d-flex align-items-center"
+      role="alert"
+    >
+      {% if category in ('danger', 'error') %}
+        <i class="bi bi-exclamation-triangle-fill me-2 flex-shrink-0" aria-hidden="true"></i>
+      {% elif category == 'warning' %}
+        <i class="bi bi-exclamation-circle-fill me-2 flex-shrink-0" aria-hidden="true"></i>
+      {% elif category == 'success' %}
+        <i class="bi bi-check-circle-fill me-2 flex-shrink-0" aria-hidden="true"></i>
+      {% else %}
+        <i class="bi bi-info-circle-fill me-2 flex-shrink-0" aria-hidden="true"></i>
+      {% endif %}
+      <div>{{ message }}</div>
+      <button
+        type="button"
+        class="btn-close"
+        data-bs-dismiss="alert"
+        aria-label="Close"
+      ></button>
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+  {% endwith %}
+  {% endblock %}
+
+
+  <!-- ================================================================
+       MAIN CONTENT
+       ================================================================ -->
+  <main id="main-content" tabindex="-1">
+    {% block content %}
+    <!-- Child templates fill this block -->
+    {% endblock %}
+  </main>
+
+
+  <!-- ================================================================
+       FOOTER
+       ================================================================ -->
+  <footer class="agg-footer" role="contentinfo">
+    <div class="container-xl">
+      <div class="row g-4 pb-3">
+
+        <!-- Brand column -->
+        <div class="col-12 col-md-4">
+          <div class="footer-brand">
+            <i class="bi bi-shield-check me-1" aria-hidden="true"></i>
+            AI Gov Gen
+          </div>
+          <p class="footer-tagline mb-2">
+            Automated AI governance documentation aligned with NIST AI RMF,
+            HKS Framework, CMMC, Lloyd&rsquo;s, and enterprise standards.
+          </p>
+          <p class="footer-legal mb-0">
+            Version {{ app_version }}
+            &nbsp;&bull;&nbsp;
+            For internal use only
+          </p>
+        </div>
+
+        <!-- Navigation column -->
+        <div class="col-6 col-md-2 offset-md-1">
+          <p class="text-white fw-600 mb-2" style="font-weight:600; font-size:0.85rem; text-transform:uppercase; letter-spacing:0.07em;">Navigation</p>
+          <ul class="footer-links">
+            <li><a href="{{ url_for('main.index') }}">Home</a></li>
+            <li><a href="{{ url_for('main.questionnaire') }}">Start Assessment</a></li>
+            {% if has_active_assessment %}
+            <li><a href="{{ url_for('main.results') }}">View Results</a></li>
+            <li><a href="{{ url_for('main.download_docx') }}">Download DOCX</a></li>
+            <li><a href="{{ url_for('main.download_pdf') }}">Download PDF</a></li>
+            {% endif %}
+            <li><a href="{{ url_for('main.about') }}">About</a></li>
+          </ul>
+        </div>
+
+        <!-- Frameworks column -->
+        <div class="col-6 col-md-2">
+          <p class="text-white fw-600 mb-2" style="font-weight:600; font-size:0.85rem; text-transform:uppercase; letter-spacing:0.07em;">Frameworks</p>
+          <ul class="footer-links">
+            {% for fw in supported_frameworks %}
+            <li><a href="{{ url_for('main.about') }}#{{ fw.id }}">{{ fw.label }}</a></li>
+            {% endfor %}
+          </ul>
+        </div>
+
+        <!-- Disclaimer column -->
+        <div class="col-12 col-md-3">
+          <p class="text-white fw-600 mb-2" style="font-weight:600; font-size:0.85rem; text-transform:uppercase; letter-spacing:0.07em;">Disclaimer</p>
+          <p class="footer-legal">
+            Generated documents are for informational purposes only and do not
+            constitute legal, regulatory, or compliance advice. Always seek
+            review from qualified professionals before formal adoption.
+          </p>
+        </div>
+
+      </div><!-- /row -->
+
+      {% block footer_extra %}{% endblock %}
+
+      <hr />
+      <div class="row align-items-center">
+        <div class="col-12 col-md-8">
+          <p class="footer-legal mb-1 mb-md-0">
+            &copy; {% set year = now.year if now is defined else 2024 %}{{ year }}
+            AI Gov Gen.
+            Built on
+            <a href="https://airc.nist.gov/" target="_blank" rel="noopener noreferrer">NIST AI RMF</a>,
+            <a href="https://www.hks.harvard.edu/" target="_blank" rel="noopener noreferrer">HKS AI Risk Framework</a>,
+            and established enterprise governance standards.
+            MIT License.
+          </p>
+        </div>
+        <div class="col-12 col-md-4 text-md-end">
+          <p class="footer-legal mb-0">
+            <span style="background: rgba(255,255,255,0.1); padding: 2px 8px; border-radius: 3px; letter-spacing:0.05em;">
+              INTERNAL &mdash; RESTRICTED
+            </span>
+          </p>
+        </div>
+      </div>
+
+    </div><!-- /container -->
+  </footer>
+
+
+  <!-- ================================================================
+       BOOTSTRAP 5 JS (CDN with SRI)
+       ================================================================ -->
+  <script
+    src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"
+    integrity="sha384-C6RzsynM9kWDrMNeT87bh95OGNyZPhcTNXj1NW7RuBCsyN/o0jlpcV8Qyq46cDfL"
+    crossorigin="anonymous"
+  ></script>
+
+  <!-- ================================================================
+       COMMON APPLICATION SCRIPTS
+       ================================================================ -->
+  <script>
+    /* ----------------------------------------------------------------
+       Auto-dismiss flash alerts after 6 seconds
+       ---------------------------------------------------------------- */
+    (function () {
+      'use strict';
+      document.addEventListener('DOMContentLoaded', function () {
+        var alerts = document.querySelectorAll('.agg-flash-container .alert');
+        alerts.forEach(function (alert) {
+          // Only auto-dismiss info and success alerts
+          if (alert.classList.contains('alert-info') || alert.classList.contains('alert-success')) {
+            setTimeout(function () {
+              var bsAlert = bootstrap.Alert.getOrCreateInstance(alert);
+              if (bsAlert) bsAlert.close();
+            }, 6000);
+          }
+        });
+      });
+    })();
+
+    /* ----------------------------------------------------------------
+       Animate risk progress bars on page load
+       ---------------------------------------------------------------- */
+    (function () {
+      'use strict';
+      document.addEventListener('DOMContentLoaded', function () {
+        var bars = document.querySelectorAll('.risk-progress-fill[data-width]');
+        bars.forEach(function (bar) {
+          var targetWidth = bar.getAttribute('data-width');
+          // Start at 0 and animate to target
+          bar.style.width = '0%';
+          requestAnimationFrame(function () {
+            requestAnimationFrame(function () {
+              bar.style.width = targetWidth;
+            });
+          });
+        });
+      });
+    })();
+
+    /* ----------------------------------------------------------------
+       Wizard step — highlight active checkbox/radio option on selection
+       ---------------------------------------------------------------- */
+    (function () {
+      'use strict';
+      document.addEventListener('DOMContentLoaded', function () {
+        document.querySelectorAll('.question-block .form-check-input').forEach(function (input) {
+          function updateHighlight() {
+            var block = input.closest('.question-block');
+            if (!block) return;
+            // For radio: uncheck all siblings first
+            if (input.type === 'radio') {
+              block.querySelectorAll('.form-check').forEach(function (fc) {
+                fc.classList.remove('selected-option');
+              });
+            }
+            var formCheck = input.closest('.form-check');
+            if (formCheck) {
+              if (input.checked) {
+                formCheck.classList.add('selected-option');
+              } else {
+                formCheck.classList.remove('selected-option');
+              }
+            }
+          }
+          input.addEventListener('change', updateHighlight);
+          // Apply on load for pre-filled responses
+          if (input.checked) updateHighlight();
+        });
+      });
+    })();
+
+    /* ----------------------------------------------------------------
+       Confirm form reset actions
+       ---------------------------------------------------------------- */
+    (function () {
+      'use strict';
+      document.addEventListener('DOMContentLoaded', function () {
+        document.querySelectorAll('[data-confirm]').forEach(function (el) {
+          el.addEventListener('click', function (e) {
+            var msg = el.getAttribute('data-confirm');
+            if (!confirm(msg)) {
+              e.preventDefault();
+              e.stopPropagation();
+            }
+          });
+        });
+      });
+    })();
+
+    /* ----------------------------------------------------------------
+       Smooth scroll for anchor links
+       ---------------------------------------------------------------- */
+    (function () {
+      'use strict';
+      document.addEventListener('DOMContentLoaded', function () {
+        document.querySelectorAll('a[href^="#"]').forEach(function (anchor) {
+          anchor.addEventListener('click', function (e) {
+            var targetId = this.getAttribute('href').substring(1);
+            if (!targetId) return;
+            var target = document.getElementById(targetId);
+            if (target) {
+              e.preventDefault();
+              target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+              // Update focus for accessibility
+              target.setAttribute('tabindex', '-1');
+              target.focus({ preventScroll: true });
+            }
+          });
+        });
+      });
+    })();
+  </script>
+
+  <!-- Selected option highlight style (injected via JS class) -->
+  <style>
+    .selected-option {
+      background-color: var(--agg-accent-light);
+      border-radius: 0.375rem;
+      padding-left: 0.5rem;
+      padding-right: 0.5rem;
+    }
+  </style>
+
+  {% block scripts %}{% endblock %}
+
+</body>
+</html>

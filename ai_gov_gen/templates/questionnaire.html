@@ -1,0 +1,961 @@
+{% extends 'base.html' %}
+{#
+  ai_gov_gen/templates/questionnaire.html
+
+  Multi-step questionnaire wizard template.  Renders a single wizard step
+  at a time, showing the appropriate questions for the current category.
+
+  Context variables (provided by routes.questionnaire):
+    step             — current step dict {step_index, category_id, step_id, title, description}
+    step_index       — zero-based current step index (int)
+    total_steps      — total number of wizard steps (int)
+    steps            — full list of step dicts (for the step indicator)
+    questions        — list of question dicts for this step
+    responses        — dict of already-stored responses (for pre-filling)
+    frameworks       — list of framework metadata dicts
+    categories       — list of category metadata dicts
+    progress_percent — integer 0–100 for the progress bar
+    is_last_step     — bool: True when on the final step
+    is_first_step    — bool: True when on step 0
+    title            — page title string
+#}
+
+{% block title_tag %}{{ title }} — AI Gov Gen{% endblock %}
+
+{% block head_extra %}
+<style>
+  /* ----------------------------------------------------------------
+     QUESTIONNAIRE-SPECIFIC STYLES
+     ---------------------------------------------------------------- */
+
+  /* Wizard progress bar */
+  .wizard-progress-track {
+    height: 6px;
+    background: var(--agg-border);
+    border-radius: 3px;
+    overflow: hidden;
+    margin-bottom: 0;
+  }
+
+  .wizard-progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, var(--agg-primary) 0%, var(--agg-accent) 100%);
+    border-radius: 3px;
+    transition: width 0.5s ease;
+  }
+
+  /* Step header banner */
+  .step-header-banner {
+    background: linear-gradient(135deg, var(--agg-primary) 0%, var(--agg-primary-light) 100%);
+    color: #ffffff;
+    padding: 2rem 0 0;
+  }
+
+  .step-header-banner .step-meta {
+    font-size: 0.78rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: rgba(255,255,255,0.65);
+    margin-bottom: 0.3rem;
+  }
+
+  .step-header-banner h1 {
+    font-size: clamp(1.3rem, 3vw, 1.8rem);
+    font-weight: 700;
+    margin-bottom: 0.4rem;
+  }
+
+  .step-header-banner .step-description {
+    color: rgba(255,255,255,0.82);
+    font-size: 0.92rem;
+    max-width: 65ch;
+    margin-bottom: 1.25rem;
+  }
+
+  /* Step indicator pills within header */
+  .step-pills-row {
+    background: rgba(0,0,0,0.18);
+    padding: 0.6rem 0;
+    margin-top: 0.5rem;
+  }
+
+  .step-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.28rem 0.7rem;
+    border-radius: 2rem;
+    font-size: 0.75rem;
+    font-weight: 600;
+    white-space: nowrap;
+    text-decoration: none;
+    transition: background 0.15s ease;
+    color: rgba(255,255,255,0.6);
+    border: 1px solid transparent;
+  }
+
+  .step-pill .pill-num {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    font-size: 0.7rem;
+    font-weight: 700;
+    background: rgba(255,255,255,0.18);
+    color: rgba(255,255,255,0.7);
+    flex-shrink: 0;
+  }
+
+  .step-pill.pill-done {
+    color: rgba(255,255,255,0.85);
+  }
+
+  .step-pill.pill-done .pill-num {
+    background: var(--agg-risk-low);
+    color: #fff;
+  }
+
+  .step-pill.pill-active {
+    background: rgba(255,255,255,0.15);
+    border-color: rgba(255,255,255,0.4);
+    color: #ffffff;
+  }
+
+  .step-pill.pill-active .pill-num {
+    background: #ffffff;
+    color: var(--agg-primary);
+  }
+
+  .step-pill-sep {
+    color: rgba(255,255,255,0.25);
+    font-size: 0.75rem;
+    margin: 0 0.1rem;
+  }
+
+  /* Question block enhancements */
+  .question-block .q-index {
+    font-size: 0.7rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--agg-text-muted);
+    margin-bottom: 0.4rem;
+  }
+
+  /* Option highlight on hover */
+  .question-block .form-check:hover .form-check-label {
+    color: var(--agg-primary);
+  }
+
+  /* Textarea and text inputs */
+  .question-block textarea.form-control {
+    resize: vertical;
+    min-height: 90px;
+  }
+
+  /* Required field indicator */
+  .req-star {
+    color: var(--agg-risk-high);
+    font-weight: 700;
+    margin-left: 2px;
+    font-size: 0.9em;
+  }
+
+  /* Help text icon */
+  .help-icon {
+    color: var(--agg-text-muted);
+    font-size: 0.82rem;
+    cursor: help;
+    margin-left: 4px;
+    vertical-align: middle;
+  }
+
+  /* Navigation buttons bar */
+  .wizard-nav-bar {
+    background: var(--agg-surface);
+    border-top: 1px solid var(--agg-border);
+    padding: 1.25rem 0;
+    position: sticky;
+    bottom: 0;
+    z-index: 100;
+    box-shadow: 0 -2px 8px rgba(0,0,0,0.07);
+  }
+
+  /* Category icon colours */
+  .cat-icon-data       { color: #0d6efd; }
+  .cat-icon-model      { color: #6610f2; }
+  .cat-icon-ops        { color: #dc3545; }
+  .cat-icon-compliance { color: #198754; }
+  .cat-icon-setup      { color: var(--agg-primary); }
+
+  /* NIST function tag colours */
+  .nist-govern  { background: #cfe2ff; color: #084298; }
+  .nist-map     { background: #d1e7dd; color: #0a3622; }
+  .nist-measure { background: #fff3cd; color: #664d03; }
+  .nist-manage  { background: #f8d7da; color: #58151c; }
+
+  /* Checkbox group with select-all */
+  .checkbox-select-all-row {
+    margin-bottom: 0.5rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 1px dashed var(--agg-border);
+  }
+
+  /* Save progress notice */
+  .progress-notice {
+    font-size: 0.8rem;
+    color: var(--agg-text-muted);
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+  }
+
+  /* Validation feedback */
+  .was-validated .question-block:has(.form-check-input:invalid) {
+    border-color: var(--bs-danger);
+  }
+
+  /* Mobile optimisations */
+  @media (max-width: 576px) {
+    .step-pills-row .container-xl {
+      overflow-x: auto;
+      display: flex;
+      flex-wrap: nowrap;
+      padding-bottom: 0.25rem;
+    }
+
+    .wizard-nav-bar .btn {
+      width: 100%;
+    }
+
+    .wizard-nav-bar .d-flex {
+      flex-direction: column-reverse;
+      gap: 0.5rem;
+    }
+  }
+</style>
+{% endblock %}
+
+
+{% block body_class %}questionnaire-page{% endblock %}
+
+
+{% block content %}
+
+{# ================================================================
+   STEP HEADER BANNER
+   ================================================================ #}
+<div class="step-header-banner">
+  <div class="container-xl">
+
+    {# Breadcrumb #}
+    <nav aria-label="breadcrumb">
+      <ol class="breadcrumb" style="font-size:0.8rem; margin-bottom:0.5rem;">
+        <li class="breadcrumb-item">
+          <a href="{{ url_for('main.index') }}" style="color:rgba(255,255,255,0.6); text-decoration:none;">Home</a>
+        </li>
+        <li class="breadcrumb-item active" style="color:rgba(255,255,255,0.85);" aria-current="page">
+          Assessment Questionnaire
+        </li>
+      </ol>
+    </nav>
+
+    {# Step meta label #}
+    <p class="step-meta">
+      Step {{ step_index + 1 }} of {{ total_steps }}
+      {% if step.category_id %}
+        &nbsp;&bull;&nbsp;
+        {% set cat_icons = {'data': 'database', 'model': 'cpu', 'ops': 'shield-lock', 'compliance': 'clipboard-check'} %}
+        <i class="bi bi-{{ cat_icons.get(step.category_id, 'question-circle') }}" aria-hidden="true"></i>
+        {{ step.category_id | title }}
+      {% endif %}
+    </p>
+
+    {# Step title and description #}
+    <h1>
+      {% if step.category_id == 'data' %}
+        <i class="bi bi-database me-2" aria-hidden="true"></i>
+      {% elif step.category_id == 'model' %}
+        <i class="bi bi-cpu me-2" aria-hidden="true"></i>
+      {% elif step.category_id == 'ops' %}
+        <i class="bi bi-shield-lock me-2" aria-hidden="true"></i>
+      {% elif step.category_id == 'compliance' %}
+        <i class="bi bi-clipboard-check me-2" aria-hidden="true"></i>
+      {% else %}
+        <i class="bi bi-sliders me-2" aria-hidden="true"></i>
+      {% endif %}
+      {{ step.title }}
+    </h1>
+    <p class="step-description">{{ step.description }}</p>
+
+    {# Progress bar #}
+    <div class="wizard-progress-track mb-0" role="progressbar"
+         aria-valuenow="{{ progress_percent }}"
+         aria-valuemin="0"
+         aria-valuemax="100"
+         aria-label="Assessment progress: {{ progress_percent }}%">
+      <div class="wizard-progress-fill" style="width: {{ progress_percent }}%;"></div>
+    </div>
+
+  </div>{# /container #}
+
+  {# Step pills row #}
+  <div class="step-pills-row">
+    <div class="container-xl">
+      <div class="d-flex align-items-center gap-1 flex-wrap">
+        {% for s in steps %}
+          {# Determine pill state #}
+          {% if s.step_index < step_index %}
+            {% set pill_class = 'pill-done' %}
+            {% set pill_icon = 'check-circle-fill' %}
+          {% elif s.step_index == step_index %}
+            {% set pill_class = 'pill-active' %}
+            {% set pill_icon = 'pencil-fill' %}
+          {% else %}
+            {% set pill_class = '' %}
+            {% set pill_icon = 'circle' %}
+          {% endif %}
+
+          <a
+            href="{{ url_for('main.questionnaire', step=s.step_index) }}"
+            class="step-pill {{ pill_class }}"
+            {% if s.step_index == step_index %}aria-current="step"{% endif %}
+            title="{{ s.title }}"
+          >
+            <span class="pill-num">
+              {% if s.step_index < step_index %}
+                <i class="bi bi-check" aria-hidden="true"></i>
+              {% else %}
+                {{ s.step_index + 1 }}
+              {% endif %}
+            </span>
+            <span class="d-none d-md-inline">{{ s.title }}</span>
+          </a>
+
+          {% if not loop.last %}
+            <span class="step-pill-sep" aria-hidden="true">›</span>
+          {% endif %}
+        {% endfor %}
+      </div>
+    </div>
+  </div>{# /step-pills-row #}
+
+</div>{# /step-header-banner #}
+
+
+{# ================================================================
+   MAIN QUESTIONNAIRE FORM
+   ================================================================ #}
+<div class="container-xl py-4">
+  <div class="row">
+
+    {# --- Left sidebar (question count summary) --- #}
+    <div class="col-12 col-lg-3 order-lg-2 mb-4 mb-lg-0">
+      <div class="sticky-top" style="top: 5rem;">
+
+        {# Step summary card #}
+        <div class="card border-0 shadow-sm mb-3">
+          <div class="card-body p-3">
+            <h6 class="fw-bold text-primary-agg mb-3" style="font-size:0.82rem; text-transform:uppercase; letter-spacing:0.07em;">
+              <i class="bi bi-info-circle me-1" aria-hidden="true"></i>
+              This Step
+            </h6>
+            <div class="d-flex justify-content-between mb-2" style="font-size:0.85rem;">
+              <span class="text-muted">Questions</span>
+              <strong>{{ questions | length }}</strong>
+            </div>
+            <div class="d-flex justify-content-between mb-2" style="font-size:0.85rem;">
+              <span class="text-muted">Step</span>
+              <strong>{{ step_index + 1 }} / {{ total_steps }}</strong>
+            </div>
+            <div class="d-flex justify-content-between mb-3" style="font-size:0.85rem;">
+              <span class="text-muted">Progress</span>
+              <strong>{{ progress_percent }}%</strong>
+            </div>
+            <div class="wizard-progress-track" style="height:8px;">
+              <div class="wizard-progress-fill" style="width:{{ progress_percent }}%;"></div>
+            </div>
+          </div>
+        </div>
+
+        {# Steps overview card #}
+        <div class="card border-0 shadow-sm mb-3">
+          <div class="card-body p-3">
+            <h6 class="fw-bold text-primary-agg mb-3" style="font-size:0.82rem; text-transform:uppercase; letter-spacing:0.07em;">
+              <i class="bi bi-list-check me-1" aria-hidden="true"></i>
+              All Steps
+            </h6>
+            <ul class="list-unstyled mb-0">
+              {% for s in steps %}
+              <li class="d-flex align-items-center gap-2 mb-2" style="font-size:0.85rem;">
+                {% if s.step_index < step_index %}
+                  <i class="bi bi-check-circle-fill text-success flex-shrink-0" aria-hidden="true"></i>
+                  <span class="text-muted">{{ s.title }}</span>
+                {% elif s.step_index == step_index %}
+                  <i class="bi bi-arrow-right-circle-fill flex-shrink-0" style="color:var(--agg-primary);" aria-hidden="true"></i>
+                  <span class="fw-bold" style="color:var(--agg-primary);">{{ s.title }}</span>
+                {% else %}
+                  <i class="bi bi-circle text-muted flex-shrink-0" aria-hidden="true"></i>
+                  <span class="text-muted">{{ s.title }}</span>
+                {% endif %}
+              </li>
+              {% endfor %}
+            </ul>
+          </div>
+        </div>
+
+        {# Framework info (if already selected) #}
+        {% set selected_fw_id = responses.get('meta_04', '') %}
+        {% if selected_fw_id %}
+          {% for fw in frameworks if fw.id == selected_fw_id %}
+          <div class="card border-0 shadow-sm" style="border-left: 3px solid var(--agg-accent) !important;">
+            <div class="card-body p-3">
+              <h6 class="fw-bold text-primary-agg mb-1" style="font-size:0.78rem; text-transform:uppercase; letter-spacing:0.07em;">
+                <i class="bi bi-diagram-3 me-1" aria-hidden="true"></i>Target Framework
+              </h6>
+              <p class="mb-0 fw-semibold" style="font-size:0.85rem; color:var(--agg-primary);">{{ fw.label }}</p>
+              <p class="mb-0 text-muted" style="font-size:0.75rem;">{{ fw.version }}</p>
+            </div>
+          </div>
+          {% endfor %}
+        {% endif %}
+
+        {# Help text box #}
+        <div class="mt-3 p-3 rounded" style="background:var(--agg-accent-light); font-size:0.8rem; color:var(--agg-primary);">
+          <i class="bi bi-lightbulb-fill me-1" aria-hidden="true"></i>
+          <strong>Tip:</strong> Answer as accurately as possible.
+          Unanswered questions are treated as the highest risk level
+          when calculating your score.
+        </div>
+
+      </div>{# /sticky-top #}
+    </div>{# /sidebar #}
+
+    {# --- Main question area --- #}
+    <div class="col-12 col-lg-9 order-lg-1">
+
+      <form
+        method="post"
+        action="{{ url_for('main.questionnaire_submit') }}"
+        id="questionnaire-form"
+        novalidate
+        autocomplete="off"
+      >
+        {# Hidden step index field #}
+        <input type="hidden" name="step_index" value="{{ step_index }}" />
+
+        {# Questions list #}
+        {% for question in questions %}
+        <div
+          class="question-block mb-4"
+          id="question-{{ question.id }}"
+          data-question-id="{{ question.id }}"
+          data-input-type="{{ question.input_type }}"
+        >
+
+          {# Question index and framework/NIST tags #}
+          <div class="d-flex align-items-center flex-wrap gap-2 mb-2">
+            <span class="q-index">Q{{ loop.index }}</span>
+
+            {# NIST function tag #}
+            {% if question.nist_function %}
+              {% set nist_fn_lower = question.nist_function | lower %}
+              <span
+                class="question-nist-tag nist-{{ nist_fn_lower }}"
+                title="NIST AI RMF Function: {{ question.nist_function }}"
+              >
+                NIST {{ question.nist_function }}
+              </span>
+            {% endif %}
+
+            {# HKS dimension tag #}
+            {% if question.hks_dimension %}
+              <span
+                class="question-nist-tag"
+                style="background:#e8d5f5; color:#4a1772;"
+                title="HKS Dimension: {{ question.hks_dimension }}"
+              >
+                {{ question.hks_dimension }}
+              </span>
+            {% endif %}
+
+            {# Required indicator (right-aligned) #}
+            {% if question.required %}
+              <span class="ms-auto text-muted" style="font-size:0.75rem;">
+                <span class="req-star" aria-hidden="true">*</span>
+                Required
+              </span>
+            {% endif %}
+          </div>
+
+          {# Question text #}
+          <p class="question-text mb-1">
+            {{ question.text }}
+            {% if question.required %}<span class="req-star" aria-label="Required">*</span>{% endif %}
+          </p>
+
+          {# Help text #}
+          {% if question.help_text %}
+          <p class="question-help">
+            <i class="bi bi-info-circle me-1" aria-hidden="true" style="font-size:0.78rem;"></i>
+            {{ question.help_text }}
+          </p>
+          {% endif %}
+
+          {# ============================================================
+             RENDER INPUT BY TYPE
+             ============================================================ #}
+
+          {# --- RADIO --- #}
+          {% if question.input_type == 'radio' %}
+          <div class="mt-2" role="radiogroup" aria-labelledby="ql-{{ question.id }}">
+            <span id="ql-{{ question.id }}" class="visually-hidden">{{ question.text }}</span>
+            {% for option in question.options %}
+            <div class="form-check mb-1">
+              <input
+                class="form-check-input"
+                type="radio"
+                name="{{ question.id }}"
+                id="{{ question.id }}_{{ option.value }}"
+                value="{{ option.value }}"
+                {% if responses.get(question.id) == option.value %}checked{% endif %}
+                {% if question.required %}required{% endif %}
+              />
+              <label
+                class="form-check-label"
+                for="{{ question.id }}_{{ option.value }}"
+              >
+                {# Risk weight indicator dot #}
+                {% if option.risk_weight == 0 %}
+                  <span class="me-1" style="color:var(--agg-risk-low); font-size:0.7rem;" aria-label="Low risk option" title="Low risk">●</span>
+                {% elif option.risk_weight == 1 %}
+                  <span class="me-1" style="color:#fbbf24; font-size:0.7rem;" aria-label="Low-medium risk option" title="Low-medium risk">●</span>
+                {% elif option.risk_weight == 2 %}
+                  <span class="me-1" style="color:var(--agg-risk-medium); font-size:0.7rem;" aria-label="Medium-high risk option" title="Medium-high risk">●</span>
+                {% elif option.risk_weight == 3 %}
+                  <span class="me-1" style="color:var(--agg-risk-high); font-size:0.7rem;" aria-label="High risk option" title="High risk">●</span>
+                {% endif %}
+                {{ option.label }}
+              </label>
+            </div>
+            {% endfor %}
+          </div>
+
+          {# --- CHECKBOX --- #}
+          {% elif question.input_type == 'checkbox' %}
+          <div class="mt-2">
+            {# Select / deselect all control #}
+            {% if question.options | length > 2 %}
+            <div class="checkbox-select-all-row">
+              <button
+                type="button"
+                class="btn btn-sm btn-outline-secondary"
+                style="font-size:0.75rem; padding:0.15rem 0.6rem;"
+                data-select-all-for="{{ question.id }}"
+                aria-label="Select all options for this question"
+              >
+                <i class="bi bi-check2-all me-1" aria-hidden="true"></i>Select all
+              </button>
+              <button
+                type="button"
+                class="btn btn-sm btn-outline-secondary ms-1"
+                style="font-size:0.75rem; padding:0.15rem 0.6rem;"
+                data-deselect-all-for="{{ question.id }}"
+                aria-label="Deselect all options for this question"
+              >
+                <i class="bi bi-x-circle me-1" aria-hidden="true"></i>Clear
+              </button>
+            </div>
+            {% endif %}
+
+            {% set stored_list = responses.get(question.id, []) %}
+            {% for option in question.options %}
+            <div class="form-check mb-1">
+              <input
+                class="form-check-input checkbox-group-{{ question.id }}"
+                type="checkbox"
+                name="{{ question.id }}"
+                id="{{ question.id }}_{{ option.value }}"
+                value="{{ option.value }}"
+                {% if option.value in stored_list %}checked{% endif %}
+              />
+              <label
+                class="form-check-label"
+                for="{{ question.id }}_{{ option.value }}"
+              >
+                {% if option.risk_weight == 0 %}
+                  <span class="me-1" style="color:var(--agg-risk-low); font-size:0.7rem;" title="Low risk">●</span>
+                {% elif option.risk_weight == 1 %}
+                  <span class="me-1" style="color:#fbbf24; font-size:0.7rem;" title="Low-medium risk">●</span>
+                {% elif option.risk_weight == 2 %}
+                  <span class="me-1" style="color:var(--agg-risk-medium); font-size:0.7rem;" title="Medium-high risk">●</span>
+                {% elif option.risk_weight == 3 %}
+                  <span class="me-1" style="color:var(--agg-risk-high); font-size:0.7rem;" title="High risk">●</span>
+                {% endif %}
+                {{ option.label }}
+              </label>
+            </div>
+            {% endfor %}
+          </div>
+
+          {# --- SELECT --- #}
+          {% elif question.input_type == 'select' %}
+          <div class="mt-2">
+            <select
+              class="form-select"
+              name="{{ question.id }}"
+              id="{{ question.id }}"
+              {% if question.required %}required{% endif %}
+              aria-label="{{ question.text }}"
+              style="max-width: 36rem;"
+            >
+              <option value="" {% if not responses.get(question.id) %}selected{% endif %} disabled>
+                — Select an option —
+              </option>
+              {% for option in question.options %}
+              <option
+                value="{{ option.value }}"
+                {% if responses.get(question.id) == option.value %}selected{% endif %}
+              >
+                {{ option.label }}
+              </option>
+              {% endfor %}
+            </select>
+          </div>
+
+          {# --- TEXT --- #}
+          {% elif question.input_type == 'text' %}
+          <div class="mt-2">
+            <input
+              type="text"
+              class="form-control"
+              name="{{ question.id }}"
+              id="{{ question.id }}"
+              value="{{ responses.get(question.id, '') }}"
+              placeholder="Enter your answer…"
+              {% if question.required %}required{% endif %}
+              autocomplete="off"
+              spellcheck="true"
+              style="max-width: 36rem;"
+              aria-label="{{ question.text }}"
+            />
+          </div>
+
+          {# --- TEXTAREA --- #}
+          {% elif question.input_type == 'textarea' %}
+          <div class="mt-2">
+            <textarea
+              class="form-control"
+              name="{{ question.id }}"
+              id="{{ question.id }}"
+              rows="4"
+              placeholder="Enter a brief description (1–3 sentences recommended)…"
+              {% if question.required %}required{% endif %}
+              spellcheck="true"
+              aria-label="{{ question.text }}"
+              style="max-width: 48rem;"
+            >{{ responses.get(question.id, '') }}</textarea>
+            <div class="form-text" style="font-size:0.75rem;">
+              <span class="char-counter" data-textarea-id="{{ question.id }}">0</span> characters
+            </div>
+          </div>
+
+          {% else %}
+          {# Fallback: render as text input #}
+          <div class="mt-2">
+            <input
+              type="text"
+              class="form-control"
+              name="{{ question.id }}"
+              id="{{ question.id }}"
+              value="{{ responses.get(question.id, '') }}"
+              {% if question.required %}required{% endif %}
+              aria-label="{{ question.text }}"
+              style="max-width: 36rem;"
+            />
+          </div>
+          {% endif %}
+
+        </div>{# /question-block #}
+        {% endfor %}
+
+        {# Empty state (no questions for this step) #}
+        {% if not questions %}
+        <div class="alert alert-warning d-flex align-items-center gap-2" role="alert">
+          <i class="bi bi-exclamation-triangle-fill" aria-hidden="true"></i>
+          <div>
+            No questions are configured for this step. Click <strong>Next</strong> to continue.
+          </div>
+        </div>
+        {% endif %}
+
+
+        {# ================================================================
+           NAVIGATION BUTTONS (sticky bottom bar)
+           ================================================================ #}
+        <div class="wizard-nav-bar">
+          <div class="container-xl">
+            <div class="d-flex align-items-center justify-content-between gap-3">
+
+              {# Progress notice (left) #}
+              <div class="progress-notice d-none d-md-flex">
+                <i class="bi bi-floppy-fill" aria-hidden="true"></i>
+                Answers saved automatically as you advance.
+              </div>
+
+              {# Navigation buttons (right) #}
+              <div class="d-flex align-items-center gap-2 ms-auto">
+
+                {# Back button (not on first step) #}
+                {% if not is_first_step %}
+                <a
+                  href="{{ url_for('main.questionnaire', step=step_index - 1) }}"
+                  class="btn btn-agg-secondary d-inline-flex align-items-center gap-2"
+                  title="Go back to previous step"
+                >
+                  <i class="bi bi-arrow-left" aria-hidden="true"></i>
+                  <span class="d-none d-sm-inline">Back</span>
+                </a>
+                {% endif %}
+
+                {# Save & continue / Submit button #}
+                {% if is_last_step %}
+                <button
+                  type="submit"
+                  class="btn btn-success d-inline-flex align-items-center gap-2 px-4"
+                  id="submit-btn"
+                >
+                  <i class="bi bi-check2-circle" aria-hidden="true"></i>
+                  Submit &amp; Generate Documents
+                  <span class="spinner-border spinner-border-sm d-none" role="status" aria-hidden="true" id="submit-spinner"></span>
+                </button>
+                {% else %}
+                <button
+                  type="submit"
+                  class="btn btn-agg-primary d-inline-flex align-items-center gap-2 px-4"
+                  id="next-btn"
+                >
+                  Save &amp; Continue
+                  <i class="bi bi-arrow-right" aria-hidden="true"></i>
+                  <span class="spinner-border spinner-border-sm d-none" role="status" aria-hidden="true" id="next-spinner"></span>
+                </button>
+                {% endif %}
+
+              </div>{# /buttons #}
+            </div>{# /flex #}
+          </div>{# /container #}
+        </div>{# /wizard-nav-bar #}
+
+      </form>
+    </div>{# /main question area #}
+  </div>{# /row #}
+</div>{# /container #}
+
+
+{# ================================================================
+   RESET CONFIRMATION MODAL
+   ================================================================ #}
+<div
+  class="modal fade"
+  id="resetModal"
+  tabindex="-1"
+  aria-labelledby="resetModalLabel"
+  aria-hidden="true"
+>
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content border-0 shadow-lg">
+      <div class="modal-header" style="background:var(--agg-primary); color:#fff; border-radius: calc(0.375rem - 1px) calc(0.375rem - 1px) 0 0;">
+        <h5 class="modal-title" id="resetModalLabel">
+          <i class="bi bi-exclamation-triangle me-2" aria-hidden="true"></i>
+          Reset Assessment?
+        </h5>
+        <button
+          type="button"
+          class="btn-close btn-close-white"
+          data-bs-dismiss="modal"
+          aria-label="Close"
+        ></button>
+      </div>
+      <div class="modal-body">
+        <p class="mb-1">
+          This will clear all your current answers and restart the assessment from the beginning.
+        </p>
+        <p class="text-muted mb-0" style="font-size:0.875rem;">
+          This action cannot be undone.
+        </p>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+        <a href="{{ url_for('main.questionnaire', reset='1') }}" class="btn btn-danger">
+          <i class="bi bi-arrow-counterclockwise me-1" aria-hidden="true"></i>
+          Yes, Reset
+        </a>
+      </div>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+
+
+{% block scripts %}
+<script>
+/* ================================================================
+   QUESTIONNAIRE PAGE SCRIPTS
+   ================================================================ */
+(function () {
+  'use strict';
+
+  /* ----------------------------------------------------------------
+     Checkbox select-all / deselect-all buttons
+     ---------------------------------------------------------------- */
+  document.querySelectorAll('[data-select-all-for]').forEach(function (btn) {
+    var groupId = btn.getAttribute('data-select-all-for');
+    btn.addEventListener('click', function () {
+      document.querySelectorAll('.checkbox-group-' + groupId).forEach(function (cb) {
+        cb.checked = true;
+        cb.dispatchEvent(new Event('change', { bubbles: true }));
+      });
+    });
+  });
+
+  document.querySelectorAll('[data-deselect-all-for]').forEach(function (btn) {
+    var groupId = btn.getAttribute('data-deselect-all-for');
+    btn.addEventListener('click', function () {
+      document.querySelectorAll('.checkbox-group-' + groupId).forEach(function (cb) {
+        cb.checked = false;
+        cb.dispatchEvent(new Event('change', { bubbles: true }));
+      });
+    });
+  });
+
+  /* ----------------------------------------------------------------
+     Character counter for textarea fields
+     ---------------------------------------------------------------- */
+  document.querySelectorAll('textarea.form-control').forEach(function (ta) {
+    var taId = ta.getAttribute('id') || ta.getAttribute('name');
+    var counter = document.querySelector('.char-counter[data-textarea-id="' + taId + '"]');
+    if (!counter) return;
+
+    function updateCounter() {
+      counter.textContent = ta.value.length;
+    }
+
+    ta.addEventListener('input', updateCounter);
+    updateCounter(); // initialise on load
+  });
+
+  /* ----------------------------------------------------------------
+     Form submission: show spinner, disable button
+     ---------------------------------------------------------------- */
+  var form = document.getElementById('questionnaire-form');
+  if (form) {
+    form.addEventListener('submit', function () {
+      var submitBtn = document.getElementById('submit-btn');
+      var nextBtn   = document.getElementById('next-btn');
+      var spinner;
+
+      if (submitBtn) {
+        submitBtn.disabled = true;
+        spinner = document.getElementById('submit-spinner');
+        if (spinner) spinner.classList.remove('d-none');
+        submitBtn.querySelector('span:not(.spinner-border)');
+      }
+      if (nextBtn) {
+        nextBtn.disabled = true;
+        spinner = document.getElementById('next-spinner');
+        if (spinner) spinner.classList.remove('d-none');
+      }
+    });
+  }
+
+  /* ----------------------------------------------------------------
+     Keyboard shortcut: Alt+Enter to advance to next step
+     ---------------------------------------------------------------- */
+  document.addEventListener('keydown', function (e) {
+    if (e.altKey && e.key === 'Enter') {
+      var f = document.getElementById('questionnaire-form');
+      if (f) {
+        var btn = f.querySelector('button[type="submit"]');
+        if (btn) btn.click();
+      }
+    }
+  });
+
+  /* ----------------------------------------------------------------
+     Auto-scroll to first question on page load
+     (only if there are questions and we are not at the top)
+     ---------------------------------------------------------------- */
+  (function () {
+    var firstQuestion = document.querySelector('.question-block');
+    if (firstQuestion && window.scrollY > 50) {
+      firstQuestion.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  })();
+
+  /* ----------------------------------------------------------------
+     Highlight radio / checkbox selections with selected-option class
+     (augments base.html script to cover newly loaded page)
+     ---------------------------------------------------------------- */
+  document.querySelectorAll('.question-block .form-check-input').forEach(function (input) {
+    function applyHighlight() {
+      var formCheck = input.closest('.form-check');
+      if (!formCheck) return;
+      if (input.type === 'radio') {
+        // Remove from all siblings in the same question block
+        var block = input.closest('.question-block');
+        if (block) {
+          block.querySelectorAll('.form-check').forEach(function (fc) {
+            fc.classList.remove('selected-option');
+          });
+        }
+      }
+      if (input.checked) {
+        formCheck.classList.add('selected-option');
+      } else {
+        formCheck.classList.remove('selected-option');
+      }
+    }
+    input.addEventListener('change', applyHighlight);
+    // Apply immediately for pre-filled answers
+    if (input.checked) applyHighlight();
+  });
+
+  /* ----------------------------------------------------------------
+     Framework selector on setup step: update hidden field and
+     visually highlight the selected framework card (if applicable)
+     ---------------------------------------------------------------- */
+  var frameworkSelect = document.getElementById('meta_04');
+  if (frameworkSelect) {
+    frameworkSelect.addEventListener('change', function () {
+      // Visually confirm selection
+      var label = frameworkSelect.options[frameworkSelect.selectedIndex]
+                    ? frameworkSelect.options[frameworkSelect.selectedIndex].text
+                    : '';
+      var notice = document.getElementById('framework-selected-notice');
+      if (notice && label) {
+        notice.textContent = '\u2713 Framework selected: ' + label;
+        notice.classList.remove('d-none');
+      }
+    });
+  }
+
+  /* ----------------------------------------------------------------
+     Auto-animate progress bar from 0 on page load
+     ---------------------------------------------------------------- */
+  document.querySelectorAll('.wizard-progress-fill').forEach(function (fill) {
+    var targetWidth = fill.style.width || '0%';
+    fill.style.width = '0%';
+    requestAnimationFrame(function () {
+      requestAnimationFrame(function () {
+        fill.style.width = targetWidth;
+      });
+    });
+  });
+
+})();
+</script>
+{% endblock %}

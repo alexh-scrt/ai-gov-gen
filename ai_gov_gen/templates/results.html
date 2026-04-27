@@ -1,0 +1,1616 @@
+{% extends 'base.html' %}
+{#
+  ai_gov_gen/templates/results.html
+
+  Results page template showing risk scores, governance checklist summary,
+  SSP entries preview, and download links for generated documents.
+
+  Context variables (provided by routes.results):
+    assessment        — AssessmentResult instance
+    assessment_dict   — assessment.to_dict() plain dict
+    checklist         — GovernanceChecklist instance (may be None)
+    checklist_dict    — checklist.to_dict() or None
+    ssp_entries       — list[SSPEntry] (may be None/empty)
+    ssp_entries_dicts — list of SSP entry dicts
+    policy_document   — PolicyDocument instance (may be None)
+    policy_dict       — policy_document.to_dict() or None
+    frameworks        — list of framework metadata dicts
+    categories        — list of category metadata dicts
+    title             — page title string
+    generation_error  — error message string or None
+#}
+
+{% block title_tag %}{{ title }} — AI Gov Gen{% endblock %}
+
+{% block head_extra %}
+<style>
+  /* ----------------------------------------------------------------
+     RESULTS PAGE SPECIFIC STYLES
+     ---------------------------------------------------------------- */
+
+  /* Overall risk hero section */
+  .results-hero {
+    background: linear-gradient(135deg, var(--agg-primary) 0%, var(--agg-primary-light) 100%);
+    color: #ffffff;
+    padding: 2.5rem 0 2rem;
+  }
+
+  .results-hero .hero-label {
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: rgba(255,255,255,0.65);
+    margin-bottom: 0.4rem;
+  }
+
+  .results-hero h1 {
+    font-size: clamp(1.4rem, 3.5vw, 2rem);
+    font-weight: 700;
+    margin-bottom: 0.25rem;
+  }
+
+  .results-hero .system-info {
+    font-size: 0.9rem;
+    color: rgba(255,255,255,0.75);
+  }
+
+  /* Overall risk score display */
+  .overall-score-box {
+    background: rgba(0,0,0,0.2);
+    border-radius: 0.75rem;
+    padding: 1.5rem 2rem;
+    text-align: center;
+    border: 1px solid rgba(255,255,255,0.15);
+  }
+
+  .overall-score-number {
+    font-size: 4rem;
+    font-weight: 800;
+    line-height: 1;
+    color: #ffffff;
+    margin-bottom: 0.25rem;
+  }
+
+  .overall-score-denom {
+    font-size: 1.5rem;
+    color: rgba(255,255,255,0.55);
+    font-weight: 400;
+  }
+
+  .overall-score-label {
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: rgba(255,255,255,0.6);
+    margin-top: 0.25rem;
+  }
+
+  /* Risk level pill (large version for hero) */
+  .risk-pill-lg {
+    display: inline-block;
+    padding: 0.45rem 1.25rem;
+    border-radius: 2rem;
+    font-size: 1rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    margin-top: 0.5rem;
+  }
+
+  .risk-pill-lg.level-low      { background: var(--agg-risk-low);      color: #fff; }
+  .risk-pill-lg.level-medium   { background: var(--agg-risk-medium);   color: #fff; }
+  .risk-pill-lg.level-high     { background: var(--agg-risk-high);     color: #fff; }
+  .risk-pill-lg.level-critical { background: var(--agg-risk-critical); color: #fff; }
+
+  /* Category score grid cards */
+  .cat-score-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 1rem;
+    margin-top: 1.5rem;
+  }
+
+  .cat-score-card {
+    background: rgba(255,255,255,0.06);
+    border: 1px solid rgba(255,255,255,0.12);
+    border-radius: 0.625rem;
+    padding: 1.1rem 1.25rem;
+    transition: background 0.15s;
+  }
+
+  .cat-score-card:hover {
+    background: rgba(255,255,255,0.1);
+  }
+
+  .cat-score-card .cat-label {
+    font-size: 0.72rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: rgba(255,255,255,0.6);
+    margin-bottom: 0.3rem;
+  }
+
+  .cat-score-card .cat-score-num {
+    font-size: 2.2rem;
+    font-weight: 800;
+    color: #ffffff;
+    line-height: 1;
+    margin-bottom: 0.3rem;
+  }
+
+  .cat-score-card .cat-score-bar {
+    height: 6px;
+    background: rgba(255,255,255,0.15);
+    border-radius: 3px;
+    overflow: hidden;
+    margin-bottom: 0.4rem;
+  }
+
+  .cat-score-card .cat-score-bar-fill {
+    height: 100%;
+    border-radius: 3px;
+    transition: width 0.7s ease;
+  }
+
+  .cat-score-card .cat-score-bar-fill.level-low      { background: #4ade80; }
+  .cat-score-card .cat-score-bar-fill.level-medium   { background: var(--agg-risk-medium); }
+  .cat-score-card .cat-score-bar-fill.level-high     { background: #f87171; }
+  .cat-score-card .cat-score-bar-fill.level-critical { background: #9ca3af; }
+
+  .cat-risk-badge {
+    display: inline-block;
+    padding: 0.15rem 0.55rem;
+    border-radius: 1rem;
+    font-size: 0.7rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+
+  .cat-risk-badge.level-low      { background: rgba(74,222,128,0.2);  color: #4ade80; }
+  .cat-risk-badge.level-medium   { background: rgba(253,126,20,0.25); color: #fed7aa; }
+  .cat-risk-badge.level-high     { background: rgba(248,113,113,0.25);color: #fca5a5; }
+  .cat-risk-badge.level-critical { background: rgba(156,163,175,0.25);color: #d1d5db; }
+
+  /* Results body section */
+  .results-body {
+    background: var(--agg-bg);
+    padding-top: 2rem;
+    padding-bottom: 3rem;
+  }
+
+  /* Section title with left border accent */
+  .section-title-accent {
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: var(--agg-primary);
+    padding-left: 0.75rem;
+    border-left: 4px solid var(--agg-accent);
+    margin-bottom: 1.25rem;
+    line-height: 1.3;
+  }
+
+  /* Download card */
+  .download-card {
+    background: var(--agg-surface);
+    border: 1px solid var(--agg-border);
+    border-radius: 0.625rem;
+    padding: 1.5rem;
+    height: 100%;
+    transition: box-shadow 0.2s ease, transform 0.15s ease;
+  }
+
+  .download-card:hover {
+    box-shadow: var(--agg-shadow-lg);
+    transform: translateY(-2px);
+  }
+
+  .download-card .download-icon {
+    font-size: 2.5rem;
+    margin-bottom: 0.75rem;
+    display: block;
+  }
+
+  .download-card h4 {
+    font-size: 1rem;
+    font-weight: 700;
+    color: var(--agg-primary);
+    margin-bottom: 0.35rem;
+  }
+
+  .download-card p {
+    font-size: 0.85rem;
+    color: var(--agg-text-muted);
+    margin-bottom: 1rem;
+  }
+
+  /* Warnings box */
+  .assessment-warnings {
+    background: #fff3cd;
+    border: 1px solid #ffc107;
+    border-left: 4px solid #ffc107;
+    border-radius: 0.5rem;
+    padding: 1rem 1.25rem;
+    margin-bottom: 1.5rem;
+  }
+
+  .assessment-warnings h6 {
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: #664d03;
+    margin-bottom: 0.5rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+
+  .assessment-warnings ul {
+    margin-bottom: 0;
+    padding-left: 1.25rem;
+  }
+
+  .assessment-warnings li {
+    font-size: 0.85rem;
+    color: #664d03;
+    margin-bottom: 0.25rem;
+  }
+
+  /* Checklist table */
+  .checklist-section .category-header-bar {
+    background: var(--agg-primary);
+    color: #ffffff;
+    padding: 0.6rem 1rem;
+    border-radius: 0.375rem 0.375rem 0 0;
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+  }
+
+  .checklist-section .category-header-bar .cat-name {
+    font-size: 0.9rem;
+    font-weight: 700;
+    flex: 1;
+  }
+
+  .checklist-section .category-header-bar .cat-meta {
+    font-size: 0.75rem;
+    color: rgba(255,255,255,0.7);
+  }
+
+  .checklist-table {
+    font-size: 0.85rem;
+    margin-bottom: 0;
+    border: 1px solid var(--agg-border);
+    border-top: none;
+    border-radius: 0 0 0.375rem 0.375rem;
+    overflow: hidden;
+  }
+
+  .checklist-table thead th {
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--agg-text-muted);
+    font-weight: 700;
+    border-bottom: 2px solid var(--agg-border);
+    background: var(--agg-bg);
+    padding: 0.6rem 0.75rem;
+    white-space: nowrap;
+  }
+
+  .checklist-table tbody td {
+    font-size: 0.83rem;
+    vertical-align: top;
+    padding: 0.65rem 0.75rem;
+    border-color: var(--agg-border);
+  }
+
+  .checklist-table .control-ref {
+    font-family: 'Consolas', 'Courier New', monospace;
+    font-size: 0.72rem;
+    color: var(--agg-primary-light);
+    word-break: break-all;
+  }
+
+  .checklist-table .action-text {
+    font-weight: 600;
+    color: var(--agg-text);
+  }
+
+  .checklist-table .rationale-text {
+    font-size: 0.78rem;
+    color: var(--agg-text-muted);
+    line-height: 1.4;
+  }
+
+  /* SSP entries */
+  .ssp-entry-card {
+    border: 1px solid var(--agg-border);
+    border-radius: 0.5rem;
+    margin-bottom: 1rem;
+    overflow: hidden;
+  }
+
+  .ssp-entry-card .ssp-header {
+    background: var(--agg-primary);
+    color: #ffffff;
+    padding: 0.6rem 1rem;
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+  }
+
+  .ssp-entry-card .ssp-entry-id {
+    font-family: 'Consolas', 'Courier New', monospace;
+    font-size: 0.75rem;
+    color: rgba(255,255,255,0.6);
+    flex-shrink: 0;
+  }
+
+  .ssp-entry-card .ssp-entry-name {
+    font-size: 0.92rem;
+    font-weight: 700;
+    flex: 1;
+  }
+
+  .ssp-entry-card .ssp-body {
+    padding: 1rem;
+    background: var(--agg-surface);
+  }
+
+  .ssp-field-group {
+    margin-bottom: 0.75rem;
+  }
+
+  .ssp-field-label {
+    font-size: 0.7rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+    color: var(--agg-text-muted);
+    margin-bottom: 0.15rem;
+  }
+
+  .ssp-field-value {
+    font-size: 0.85rem;
+    color: var(--agg-text);
+    line-height: 1.5;
+  }
+
+  /* Status badges for SSP */
+  .status-badge {
+    display: inline-block;
+    padding: 0.18rem 0.6rem;
+    border-radius: 1rem;
+    font-size: 0.72rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+
+  .status-implemented     { background: #d1e7dd; color: #0a3622; }
+  .status-partially       { background: #fff3cd; color: #664d03; }
+  .status-planned         { background: #cfe2ff; color: #084298; }
+  .status-not-implemented { background: #f8d7da; color: #58151c; }
+  .status-not-applicable  { background: #e2e3e5; color: #41464b; }
+
+  /* Policy section preview */
+  .policy-section-preview {
+    background: var(--agg-surface);
+    border: 1px solid var(--agg-border);
+    border-radius: 0.5rem;
+    padding: 1.25rem 1.5rem;
+    margin-bottom: 1rem;
+  }
+
+  .policy-section-preview .sec-header {
+    display: flex;
+    align-items: baseline;
+    gap: 0.75rem;
+    border-bottom: 1px solid var(--agg-border);
+    padding-bottom: 0.5rem;
+    margin-bottom: 0.75rem;
+  }
+
+  .policy-section-preview .sec-num {
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: var(--agg-accent);
+    flex-shrink: 0;
+  }
+
+  .policy-section-preview .sec-title {
+    font-size: 0.95rem;
+    font-weight: 700;
+    color: var(--agg-primary);
+  }
+
+  .policy-section-preview .sec-content {
+    font-size: 0.83rem;
+    color: var(--agg-text);
+    line-height: 1.6;
+    max-height: 100px;
+    overflow: hidden;
+    position: relative;
+  }
+
+  .policy-section-preview .sec-content::after {
+    content: '';
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 40px;
+    background: linear-gradient(transparent, var(--agg-surface));
+  }
+
+  /* Tab navigation */
+  .results-tabs .nav-link {
+    font-size: 0.88rem;
+    font-weight: 600;
+    color: var(--agg-text-muted);
+    border-radius: 0.375rem 0.375rem 0 0;
+    padding: 0.6rem 1.1rem;
+  }
+
+  .results-tabs .nav-link.active {
+    color: var(--agg-primary);
+    border-bottom-color: transparent;
+  }
+
+  .results-tabs .nav-link:hover:not(.active) {
+    color: var(--agg-primary);
+    background: var(--agg-accent-light);
+  }
+
+  .results-tabs .nav-link .tab-count {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 20px;
+    height: 20px;
+    padding: 0 5px;
+    border-radius: 1rem;
+    font-size: 0.68rem;
+    font-weight: 700;
+    background: var(--agg-border);
+    color: var(--agg-text-muted);
+    margin-left: 0.4rem;
+  }
+
+  .results-tabs .nav-link.active .tab-count {
+    background: var(--agg-primary);
+    color: #ffffff;
+  }
+
+  /* Completion stat cards */
+  .stat-mini-card {
+    background: var(--agg-surface);
+    border: 1px solid var(--agg-border);
+    border-radius: 0.5rem;
+    padding: 1rem;
+    text-align: center;
+  }
+
+  .stat-mini-card .stat-value {
+    font-size: 1.8rem;
+    font-weight: 800;
+    color: var(--agg-primary);
+    line-height: 1;
+    margin-bottom: 0.2rem;
+  }
+
+  .stat-mini-card .stat-label {
+    font-size: 0.72rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+    color: var(--agg-text-muted);
+  }
+
+  /* Generation error banner */
+  .generation-error-banner {
+    background: #f8d7da;
+    border: 1px solid #f1aeb5;
+    border-left: 4px solid var(--agg-risk-high);
+    border-radius: 0.5rem;
+    padding: 1rem 1.25rem;
+    margin-bottom: 1.5rem;
+  }
+
+  /* Responsive adjustments */
+  @media (max-width: 767px) {
+    .overall-score-number { font-size: 3rem; }
+    .cat-score-grid { grid-template-columns: repeat(2, 1fr); }
+    .checklist-table .rationale-text { display: none; }
+  }
+
+  @media (max-width: 575px) {
+    .cat-score-grid { grid-template-columns: 1fr 1fr; }
+    .overall-score-box { padding: 1rem; }
+  }
+</style>
+{% endblock %}
+
+
+{% block body_class %}results-page{% endblock %}
+
+
+{# ================================================================
+   MACROS
+   ================================================================ #}
+
+{%- macro render_risk_badge(level) -%}
+  {%- set lvl_lower = level | lower -%}
+  <span class="cat-risk-badge level-{{ lvl_lower }}" title="Risk Level: {{ level }}">{{ level }}</span>
+{%- endmacro -%}
+
+{%- macro render_status_badge(status) -%}
+  {%- if status == 'Implemented' -%}
+    <span class="status-badge status-implemented">Implemented</span>
+  {%- elif status == 'Partially Implemented' -%}
+    <span class="status-badge status-partially">Partial</span>
+  {%- elif status == 'Planned' -%}
+    <span class="status-badge status-planned">Planned</span>
+  {%- elif status == 'Not Applicable' -%}
+    <span class="status-badge status-not-applicable">N/A</span>
+  {%- else -%}
+    <span class="status-badge status-not-implemented">Not Implemented</span>
+  {%- endif -%}
+{%- endmacro -%}
+
+{%- macro render_risk_badge_inline(level) -%}
+  {%- set lvl_lower = level | lower -%}
+  {%- if lvl_lower == 'low' -%}
+    <span class="badge" style="background:var(--agg-risk-low); font-size:0.7rem;">{{ level }}</span>
+  {%- elif lvl_lower == 'medium' -%}
+    <span class="badge" style="background:var(--agg-risk-medium); font-size:0.7rem;">{{ level }}</span>
+  {%- elif lvl_lower == 'high' -%}
+    <span class="badge" style="background:var(--agg-risk-high); font-size:0.7rem;">{{ level }}</span>
+  {%- elif lvl_lower == 'critical' -%}
+    <span class="badge" style="background:var(--agg-risk-critical); font-size:0.7rem;">{{ level }}</span>
+  {%- else -%}
+    <span class="badge bg-secondary" style="font-size:0.7rem;">{{ level }}</span>
+  {%- endif -%}
+{%- endmacro -%}
+
+
+{% block content %}
+
+{# ================================================================
+   HERO — Overall Risk Score
+   ================================================================ #}
+<div class="results-hero">
+  <div class="container-xl">
+
+    {# Breadcrumb #}
+    <nav aria-label="breadcrumb">
+      <ol class="breadcrumb" style="font-size:0.8rem; margin-bottom:0.75rem;">
+        <li class="breadcrumb-item">
+          <a href="{{ url_for('main.index') }}" style="color:rgba(255,255,255,0.6); text-decoration:none;">Home</a>
+        </li>
+        <li class="breadcrumb-item">
+          <a href="{{ url_for('main.questionnaire') }}" style="color:rgba(255,255,255,0.6); text-decoration:none;">Assessment</a>
+        </li>
+        <li class="breadcrumb-item active" style="color:rgba(255,255,255,0.85);" aria-current="page">Results</li>
+      </ol>
+    </nav>
+
+    <div class="row align-items-center g-4">
+
+      {# System info + category scores #}
+      <div class="col-12 col-lg-8">
+        <p class="hero-label">Assessment Results</p>
+        <h1>
+          <i class="bi bi-bar-chart-fill me-2" aria-hidden="true"></i>
+          {{ assessment.system_name | e }}
+        </h1>
+        <p class="system-info mb-0">
+          <i class="bi bi-person-badge me-1" aria-hidden="true"></i>
+          {{ assessment.system_owner | e }}
+          &nbsp;&bull;&nbsp;
+          <i class="bi bi-diagram-3 me-1" aria-hidden="true"></i>
+          {{ assessment.framework_label | e }}
+          &nbsp;&bull;&nbsp;
+          <i class="bi bi-calendar3 me-1" aria-hidden="true"></i>
+          {% if policy_document %}{{ policy_document.generated_date }}{% else %}Today{% endif %}
+        </p>
+
+        {# Category score grid #}
+        <div class="cat-score-grid" role="list" aria-label="Risk scores by category">
+          {% for cr in assessment.category_results %}
+          <div class="cat-score-card" role="listitem">
+            <p class="cat-label">
+              {% if cr.category_id == 'data' %}<i class="bi bi-database me-1" aria-hidden="true"></i>
+              {% elif cr.category_id == 'model' %}<i class="bi bi-cpu me-1" aria-hidden="true"></i>
+              {% elif cr.category_id == 'ops' %}<i class="bi bi-shield-lock me-1" aria-hidden="true"></i>
+              {% elif cr.category_id == 'compliance' %}<i class="bi bi-clipboard-check me-1" aria-hidden="true"></i>
+              {% endif %}
+              {{ cr.category_label | e }}
+            </p>
+            <p class="cat-score-num" aria-label="Score {{ cr.normalised_score | round(1) }} out of 100">
+              {{ cr.normalised_score | round(1) }}<span style="font-size:1rem; color:rgba(255,255,255,0.5); font-weight:400;">/100</span>
+            </p>
+            <div class="cat-score-bar" role="progressbar" aria-valuenow="{{ cr.normalised_score | round }}" aria-valuemin="0" aria-valuemax="100">
+              <div
+                class="cat-score-bar-fill level-{{ cr.risk_level | lower }}"
+                data-width="{{ cr.normalised_score | round(1) }}%"
+                style="width: {{ cr.normalised_score | round(1) }}%;"
+              ></div>
+            </div>
+            <span class="cat-risk-badge level-{{ cr.risk_level | lower }}">{{ cr.risk_level | e }}</span>
+          </div>
+          {% endfor %}
+        </div>
+
+      </div>{# /col-lg-8 #}
+
+      {# Overall score box #}
+      <div class="col-12 col-lg-4">
+        <div class="overall-score-box text-center">
+          <p style="font-size:0.72rem; font-weight:700; text-transform:uppercase; letter-spacing:0.1em; color:rgba(255,255,255,0.55); margin-bottom:0.5rem;">
+            Overall Risk Score
+          </p>
+          <div class="overall-score-number" aria-label="Overall score {{ assessment.overall_score | round(1) }} out of 100">
+            {{ assessment.overall_score | round(1) }}<span class="overall-score-denom">/100</span>
+          </div>
+          <p class="overall-score-label">Normalised Risk Score</p>
+          <div class="mt-2">
+            <span class="risk-pill-lg level-{{ assessment.overall_risk_level | lower }}" role="status" aria-label="Overall risk level: {{ assessment.overall_risk_level }}">
+              <i class="bi bi-{% if assessment.overall_risk_level == 'Low' %}check-circle{% elif assessment.overall_risk_level == 'Medium' %}exclamation-circle{% else %}exclamation-triangle{% endif %} me-1" aria-hidden="true"></i>
+              {{ assessment.overall_risk_level | e }}
+            </span>
+          </div>
+
+          {# Mini stats #}
+          <div class="row g-2 mt-3">
+            <div class="col-6">
+              <div style="background:rgba(0,0,0,0.15); border-radius:0.4rem; padding:0.6rem;">
+                <p style="font-size:1.4rem; font-weight:800; color:#fff; line-height:1; margin:0;">{{ checklist.total_items if checklist else 0 }}</p>
+                <p style="font-size:0.65rem; text-transform:uppercase; letter-spacing:0.08em; color:rgba(255,255,255,0.55); margin:0;">Checklist Items</p>
+              </div>
+            </div>
+            <div class="col-6">
+              <div style="background:rgba(0,0,0,0.15); border-radius:0.4rem; padding:0.6rem;">
+                <p style="font-size:1.4rem; font-weight:800; color:#fff; line-height:1; margin:0;">{{ ssp_entries | length if ssp_entries else 0 }}</p>
+                <p style="font-size:0.65rem; text-transform:uppercase; letter-spacing:0.08em; color:rgba(255,255,255,0.55); margin:0;">SSP Controls</p>
+              </div>
+            </div>
+          </div>
+
+        </div>{# /overall-score-box #}
+      </div>{# /col-lg-4 #}
+
+    </div>{# /row #}
+  </div>{# /container #}
+</div>{# /results-hero #}
+
+
+{# ================================================================
+   RESULTS BODY
+   ================================================================ #}
+<div class="results-body">
+  <div class="container-xl">
+
+    {# Generation error banner #}
+    {% if generation_error %}
+    <div class="generation-error-banner" role="alert">
+      <div class="d-flex align-items-start gap-2">
+        <i class="bi bi-exclamation-triangle-fill text-danger flex-shrink-0 mt-1" aria-hidden="true"></i>
+        <div>
+          <strong style="color: var(--agg-risk-high);">Document Generation Warning</strong>
+          <p class="mb-0 mt-1" style="font-size:0.875rem; color:#58151c;">{{ generation_error | e }}</p>
+          <p class="mb-0 mt-1" style="font-size:0.8rem; color:#58151c;">Risk scores are displayed below. Please try downloading the DOCX or refreshing the page.</p>
+        </div>
+      </div>
+    </div>
+    {% endif %}
+
+    {# Assessment warnings #}
+    {% if assessment.warnings %}
+    <div class="assessment-warnings" role="alert" aria-label="Assessment warnings">
+      <h6>
+        <i class="bi bi-exclamation-circle-fill me-1" aria-hidden="true"></i>
+        Assessment Warnings
+      </h6>
+      <ul>
+        {% for warning in assessment.warnings %}
+        <li>{{ warning | e }}</li>
+        {% endfor %}
+      </ul>
+    </div>
+    {% endif %}
+
+    <div class="row g-4">
+
+      {# ============================================================
+         LEFT COLUMN — Downloads + Summary
+         ============================================================ #}
+      <div class="col-12 col-lg-4 col-xl-3">
+
+        {# ---- Download section ---- #}
+        <div class="mb-4">
+          <h2 class="section-title-accent">Download Documents</h2>
+
+          <div class="row g-3">
+
+            {# DOCX download card #}
+            <div class="col-12">
+              <div class="download-card">
+                <span class="download-icon text-primary-agg"><i class="bi bi-file-earmark-word" aria-hidden="true"></i></span>
+                <h4>Policy Package (DOCX)</h4>
+                <p>
+                  Fully formatted Word document containing the AI Use Policy,
+                  Governance Checklist, and SSP Control Entries.
+                </p>
+                <a
+                  href="{{ url_for('main.download_docx') }}"
+                  class="btn btn-agg-primary btn-download w-100"
+                  aria-label="Download DOCX governance document package for {{ assessment.system_name }}"
+                >
+                  <i class="bi bi-download" aria-hidden="true"></i>
+                  Download DOCX
+                </a>
+              </div>
+            </div>
+
+            {# PDF download card #}
+            <div class="col-12">
+              <div class="download-card">
+                <span class="download-icon" style="color:#dc3545;"><i class="bi bi-file-earmark-pdf" aria-hidden="true"></i></span>
+                <h4>Policy Package (PDF)</h4>
+                <p>
+                  Print-ready PDF version of the full governance document,
+                  formatted for compliance review and submission.
+                </p>
+                <a
+                  href="{{ url_for('main.download_pdf') }}"
+                  class="btn btn-download w-100"
+                  style="background: #dc3545; color:#fff; border:none; font-weight:600;"
+                  aria-label="Download PDF governance document package for {{ assessment.system_name }}"
+                >
+                  <i class="bi bi-download" aria-hidden="true"></i>
+                  Download PDF
+                </a>
+              </div>
+            </div>
+
+          </div>{# /row #}
+        </div>
+
+        {# ---- Summary stats ---- #}
+        <div class="mb-4">
+          <h2 class="section-title-accent">Assessment Summary</h2>
+
+          <div class="agg-card p-3">
+            <dl class="mb-0" style="font-size:0.85rem;">
+
+              <dt class="text-muted" style="font-size:0.7rem; text-transform:uppercase; letter-spacing:0.07em;">System</dt>
+              <dd class="fw-semibold mb-2">{{ assessment.system_name | e }}</dd>
+
+              <dt class="text-muted" style="font-size:0.7rem; text-transform:uppercase; letter-spacing:0.07em;">Owner</dt>
+              <dd class="fw-semibold mb-2">{{ assessment.system_owner | e }}</dd>
+
+              <dt class="text-muted" style="font-size:0.7rem; text-transform:uppercase; letter-spacing:0.07em;">Framework</dt>
+              <dd class="fw-semibold mb-2">{{ assessment.framework_label | e }}</dd>
+
+              <dt class="text-muted" style="font-size:0.7rem; text-transform:uppercase; letter-spacing:0.07em;">Overall Risk</dt>
+              <dd class="mb-2">
+                {{ render_risk_badge_inline(assessment.overall_risk_level) }}
+                <span class="fw-semibold ms-1">{{ assessment.overall_score | round(1) }}/100</span>
+              </dd>
+
+              <dt class="text-muted" style="font-size:0.7rem; text-transform:uppercase; letter-spacing:0.07em;">Purpose</dt>
+              <dd class="mb-0" style="font-size:0.82rem; color:var(--agg-text-muted);">{{ assessment.system_purpose | e }}</dd>
+
+            </dl>
+          </div>
+        </div>
+
+        {# ---- Quick actions ---- #}
+        <div class="mb-4">
+          <h2 class="section-title-accent">Actions</h2>
+          <div class="d-grid gap-2">
+            <a
+              href="{{ url_for('main.questionnaire') }}"
+              class="btn btn-outline-primary btn-sm d-flex align-items-center gap-2"
+            >
+              <i class="bi bi-pencil" aria-hidden="true"></i>
+              Edit Responses
+            </a>
+            <form method="post" action="{{ url_for('main.reset') }}" class="d-grid">
+              <button
+                type="submit"
+                class="btn btn-outline-danger btn-sm d-flex align-items-center gap-2 justify-content-center"
+                onclick="return confirm('Clear the assessment and start over? This cannot be undone.');"
+              >
+                <i class="bi bi-arrow-counterclockwise" aria-hidden="true"></i>
+                Start New Assessment
+              </button>
+            </form>
+          </div>
+        </div>
+
+        {# ---- High/Critical risk callout ---- #}
+        {% if assessment.high_or_critical_categories %}
+        <div
+          class="p-3 rounded mb-4"
+          style="background:#f8d7da; border:1px solid #f1aeb5; border-left:4px solid var(--agg-risk-high);"
+          role="alert"
+          aria-label="Priority attention required"
+        >
+          <h6 style="font-size:0.82rem; font-weight:700; color:#58151c; margin-bottom:0.5rem; text-transform:uppercase; letter-spacing:0.06em;">
+            <i class="bi bi-exclamation-triangle-fill me-1" aria-hidden="true"></i>
+            Priority Attention Required
+          </h6>
+          <ul style="margin:0; padding-left:1.25rem; font-size:0.82rem; color:#58151c;">
+            {% for cr in assessment.high_or_critical_categories %}
+            <li>
+              <strong>{{ cr.category_label | e }}</strong>
+              — {{ cr.risk_level | e }} ({{ cr.normalised_score | round(1) }}/100)
+            </li>
+            {% endfor %}
+          </ul>
+        </div>
+        {% endif %}
+
+        {# ---- Disclaimer ---- #}
+        <div
+          class="p-3 rounded"
+          style="background:var(--agg-accent-light); border:1px solid rgba(74,159,212,0.3); font-size:0.78rem; color:var(--agg-primary);"
+          role="note"
+        >
+          <i class="bi bi-info-circle-fill me-1" aria-hidden="true"></i>
+          Generated documents are for informational purposes only.
+          Review with qualified compliance professionals before formal adoption.
+        </div>
+
+      </div>{# /left column #}
+
+
+      {# ============================================================
+         RIGHT COLUMN — Tabbed artifact sections
+         ============================================================ #}
+      <div class="col-12 col-lg-8 col-xl-9">
+
+        {# Tab navigation #}
+        <ul
+          class="nav nav-tabs results-tabs mb-3"
+          id="resultsTabs"
+          role="tablist"
+          aria-label="Assessment result sections"
+        >
+          <li class="nav-item" role="presentation">
+            <button
+              class="nav-link active"
+              id="checklist-tab"
+              data-bs-toggle="tab"
+              data-bs-target="#checklist-pane"
+              type="button"
+              role="tab"
+              aria-controls="checklist-pane"
+              aria-selected="true"
+            >
+              <i class="bi bi-list-check me-1" aria-hidden="true"></i>
+              Governance Checklist
+              <span class="tab-count">{{ checklist.total_items if checklist else 0 }}</span>
+            </button>
+          </li>
+          <li class="nav-item" role="presentation">
+            <button
+              class="nav-link"
+              id="ssp-tab"
+              data-bs-toggle="tab"
+              data-bs-target="#ssp-pane"
+              type="button"
+              role="tab"
+              aria-controls="ssp-pane"
+              aria-selected="false"
+            >
+              <i class="bi bi-file-text me-1" aria-hidden="true"></i>
+              SSP Entries
+              <span class="tab-count">{{ ssp_entries | length if ssp_entries else 0 }}</span>
+            </button>
+          </li>
+          <li class="nav-item" role="presentation">
+            <button
+              class="nav-link"
+              id="policy-tab"
+              data-bs-toggle="tab"
+              data-bs-target="#policy-pane"
+              type="button"
+              role="tab"
+              aria-controls="policy-pane"
+              aria-selected="false"
+            >
+              <i class="bi bi-journal-text me-1" aria-hidden="true"></i>
+              AI Use Policy
+              <span class="tab-count">{{ policy_document.sections | length if policy_document else 0 }}</span>
+            </button>
+          </li>
+          <li class="nav-item" role="presentation">
+            <button
+              class="nav-link"
+              id="scores-tab"
+              data-bs-toggle="tab"
+              data-bs-target="#scores-pane"
+              type="button"
+              role="tab"
+              aria-controls="scores-pane"
+              aria-selected="false"
+            >
+              <i class="bi bi-bar-chart me-1" aria-hidden="true"></i>
+              Score Detail
+            </button>
+          </li>
+        </ul>
+
+        <div class="tab-content" id="resultsTabContent">
+
+          {# ============================================================
+             TAB 1: GOVERNANCE CHECKLIST
+             ============================================================ #}
+          <div
+            class="tab-pane fade show active"
+            id="checklist-pane"
+            role="tabpanel"
+            aria-labelledby="checklist-tab"
+            tabindex="0"
+          >
+
+            {% if checklist and checklist.total_items > 0 %}
+
+              {# Summary stats row #}
+              <div class="row g-3 mb-4">
+                <div class="col-6 col-sm-3">
+                  <div class="stat-mini-card">
+                    <div class="stat-value">{{ checklist.total_items }}</div>
+                    <div class="stat-label">Total Items</div>
+                  </div>
+                </div>
+                <div class="col-6 col-sm-3">
+                  <div class="stat-mini-card">
+                    <div class="stat-value" style="color:var(--agg-risk-critical);">{{ checklist.total_critical_items }}</div>
+                    <div class="stat-label">Critical</div>
+                  </div>
+                </div>
+                {% set high_items = namespace(count=0) %}
+                {% for cat in checklist.categories %}
+                  {% for item in cat.items if item.risk_level == 'High' %}
+                    {% set high_items.count = high_items.count + 1 %}
+                  {% endfor %}
+                {% endfor %}
+                <div class="col-6 col-sm-3">
+                  <div class="stat-mini-card">
+                    <div class="stat-value" style="color:var(--agg-risk-high);">{{ high_items.count }}</div>
+                    <div class="stat-label">High</div>
+                  </div>
+                </div>
+                <div class="col-6 col-sm-3">
+                  <div class="stat-mini-card">
+                    <div class="stat-value" style="color:var(--agg-primary);">{{ checklist.framework_label | truncate(8, True, '') }}</div>
+                    <div class="stat-label">Framework</div>
+                  </div>
+                </div>
+              </div>
+
+              <p style="font-size:0.85rem; color:var(--agg-text-muted); margin-bottom:1.5rem;">
+                <i class="bi bi-info-circle me-1" aria-hidden="true"></i>
+                Items are ordered by risk severity (Critical first) within each category.
+                Download the DOCX or PDF for a print-ready version with completion checkboxes.
+              </p>
+
+              {# Per-category checklist #}
+              <div class="checklist-section">
+                {% for category in checklist.categories %}
+                {% if category.items %}
+                <div class="mb-4" id="checklist-cat-{{ category.category_id }}">
+
+                  {# Category header bar #}
+                  <div class="category-header-bar">
+                    <span class="cat-name">
+                      {% if category.category_id == 'data' %}<i class="bi bi-database me-1" aria-hidden="true"></i>
+                      {% elif category.category_id == 'model' %}<i class="bi bi-cpu me-1" aria-hidden="true"></i>
+                      {% elif category.category_id == 'ops' %}<i class="bi bi-shield-lock me-1" aria-hidden="true"></i>
+                      {% elif category.category_id == 'compliance' %}<i class="bi bi-clipboard-check me-1" aria-hidden="true"></i>
+                      {% endif %}
+                      {{ category.category_label | e }}
+                    </span>
+                    <span class="cat-meta">
+                      Risk: {{ category.risk_level | e }}&nbsp;
+                      | Score: {{ category.normalised_score | round(1) }}/100&nbsp;
+                      | {{ category.item_count }} item{{ 's' if category.item_count != 1 else '' }}
+                    </span>
+                    <span class="cat-risk-badge level-{{ category.risk_level | lower }}">{{ category.risk_level | e }}</span>
+                  </div>
+
+                  {# Items table #}
+                  <div class="table-responsive">
+                    <table class="table table-hover checklist-table" aria-label="Checklist items for {{ category.category_label }}">
+                      <thead>
+                        <tr>
+                          <th scope="col" style="width:2.5rem;">#</th>
+                          <th scope="col" style="width:7rem;">Priority</th>
+                          <th scope="col" style="width:8rem;">Control Ref</th>
+                          <th scope="col">Required Action</th>
+                          <th scope="col" class="d-none d-xl-table-cell" style="width:28%;">Rationale</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {% for item in category.items %}
+                        <tr>
+                          <td class="text-muted" style="font-size:0.75rem;">{{ loop.index }}</td>
+                          <td>
+                            {{ render_risk_badge_inline(item.risk_level) }}
+                          </td>
+                          <td>
+                            <span class="control-ref">{{ item.control_ref | e }}</span>
+                          </td>
+                          <td>
+                            <p class="action-text mb-1">{{ item.action | e }}</p>
+                          </td>
+                          <td class="d-none d-xl-table-cell">
+                            <p class="rationale-text mb-0">{{ item.rationale | e }}</p>
+                          </td>
+                        </tr>
+                        {% endfor %}
+                      </tbody>
+                    </table>
+                  </div>{# /table-responsive #}
+
+                </div>{# /checklist category #}
+                {% endif %}
+                {% endfor %}
+              </div>{# /checklist-section #}
+
+            {% elif checklist and checklist.total_items == 0 %}
+              <div class="alert alert-success d-flex align-items-center gap-2" role="status">
+                <i class="bi bi-check-circle-fill" aria-hidden="true"></i>
+                <div>
+                  <strong>Excellent!</strong>
+                  No governance gaps were identified based on your responses.
+                  Continue to monitor and review your AI system regularly.
+                </div>
+              </div>
+            {% else %}
+              <div class="alert alert-warning d-flex align-items-center gap-2" role="alert">
+                <i class="bi bi-exclamation-circle" aria-hidden="true"></i>
+                <div>Checklist generation failed or is unavailable. Please download the DOCX for the full checklist.</div>
+              </div>
+            {% endif %}
+
+          </div>{# /checklist-pane #}
+
+
+          {# ============================================================
+             TAB 2: SSP ENTRIES
+             ============================================================ #}
+          <div
+            class="tab-pane fade"
+            id="ssp-pane"
+            role="tabpanel"
+            aria-labelledby="ssp-tab"
+            tabindex="0"
+          >
+
+            {% if ssp_entries and ssp_entries | length > 0 %}
+
+              <p style="font-size:0.85rem; color:var(--agg-text-muted); margin-bottom:1.25rem;">
+                <i class="bi bi-info-circle me-1" aria-hidden="true"></i>
+                The following SSP control entries document implementation status for
+                <strong>{{ assessment.system_name | e }}</strong>.
+                These entries can be inserted directly into your System Security Plan.
+                Download the full package for a formatted version.
+              </p>
+
+              {# Status overview summary table #}
+              <div class="table-responsive mb-4">
+                <table class="table table-sm table-bordered" style="font-size:0.82rem;" aria-label="SSP implementation status overview">
+                  <thead style="background:var(--agg-bg);">
+                    <tr>
+                      <th scope="col">Entry ID</th>
+                      <th scope="col">Control Name</th>
+                      <th scope="col">Family</th>
+                      <th scope="col">Status</th>
+                      <th scope="col">Risk</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {% for entry in ssp_entries %}
+                    <tr>
+                      <td style="font-family:'Consolas','Courier New',monospace; font-size:0.72rem; color:var(--agg-primary-light);">
+                        <a href="#ssp-{{ entry.entry_id | e }}" style="color:var(--agg-primary-light); text-decoration:none;">{{ entry.entry_id | e }}</a>
+                      </td>
+                      <td class="fw-semibold">{{ entry.control_name | e }}</td>
+                      <td class="text-muted">{{ entry.control_family | e }}</td>
+                      <td>{{ render_status_badge(entry.implementation_status) }}</td>
+                      <td>{{ render_risk_badge_inline(entry.risk_level) }}</td>
+                    </tr>
+                    {% endfor %}
+                  </tbody>
+                </table>
+              </div>
+
+              {# Detailed SSP entries #}
+              {% for entry in ssp_entries %}
+              <div class="ssp-entry-card" id="ssp-{{ entry.entry_id | e }}">
+
+                <div class="ssp-header">
+                  <span class="ssp-entry-id">{{ entry.entry_id | e }}</span>
+                  <span class="ssp-entry-name">{{ entry.control_name | e }}</span>
+                  {{ render_status_badge(entry.implementation_status) }}
+                  &nbsp;
+                  {{ render_risk_badge_inline(entry.risk_level) }}
+                </div>
+
+                <div class="ssp-body">
+                  <div class="row g-3">
+                    <div class="col-12 col-md-6">
+                      <div class="ssp-field-group">
+                        <p class="ssp-field-label">Control Reference</p>
+                        <p class="ssp-field-value" style="font-family:'Consolas','Courier New',monospace; font-size:0.78rem; color:var(--agg-primary-light);">{{ entry.control_ref | e }}</p>
+                      </div>
+                      <div class="ssp-field-group">
+                        <p class="ssp-field-label">Control Family</p>
+                        <p class="ssp-field-value">{{ entry.control_family | e }}</p>
+                      </div>
+                      <div class="ssp-field-group">
+                        <p class="ssp-field-label">Responsible Role</p>
+                        <p class="ssp-field-value">{{ entry.responsible_role | e }}</p>
+                      </div>
+                    </div>
+                    <div class="col-12 col-md-6">
+                      <div class="ssp-field-group">
+                        <p class="ssp-field-label">Implementation Status</p>
+                        <p class="ssp-field-value">{{ render_status_badge(entry.implementation_status) }}</p>
+                      </div>
+                      <div class="ssp-field-group">
+                        <p class="ssp-field-label">Assessment Finding</p>
+                        <p class="ssp-field-value">{{ entry.assessment_finding | e }}</p>
+                      </div>
+                      {% if entry.implementation_status not in ('Implemented', 'Not Applicable') %}
+                      <div class="ssp-field-group">
+                        <p class="ssp-field-label">Remediation Action</p>
+                        <p class="ssp-field-value" style="color:var(--agg-risk-high); font-weight:600;">{{ entry.remediation_action | e }}</p>
+                      </div>
+                      {% endif %}
+                    </div>
+                    <div class="col-12">
+                      <div class="ssp-field-group">
+                        <p class="ssp-field-label">Control Description</p>
+                        <p class="ssp-field-value">{{ entry.control_description | e }}</p>
+                      </div>
+                      <div class="ssp-field-group mb-0">
+                        <p class="ssp-field-label">Evidence Artefacts</p>
+                        <p class="ssp-field-value mb-0">
+                          {% for artefact in entry.evidence_artifacts %}
+                          <span class="badge me-1 mb-1" style="background:var(--agg-accent-light); color:var(--agg-primary); font-weight:600; font-size:0.72rem;">{{ artefact | e }}</span>
+                          {% endfor %}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </div>{# /ssp-body #}
+
+              </div>{# /ssp-entry-card #}
+              {% endfor %}
+
+            {% else %}
+              <div class="alert alert-warning d-flex align-items-center gap-2" role="alert">
+                <i class="bi bi-exclamation-circle" aria-hidden="true"></i>
+                <div>SSP entries are unavailable. Please download the DOCX for the full SSP section.</div>
+              </div>
+            {% endif %}
+
+          </div>{# /ssp-pane #}
+
+
+          {# ============================================================
+             TAB 3: POLICY DOCUMENT PREVIEW
+             ============================================================ #}
+          <div
+            class="tab-pane fade"
+            id="policy-pane"
+            role="tabpanel"
+            aria-labelledby="policy-tab"
+            tabindex="0"
+          >
+
+            {% if policy_document and policy_document.sections %}
+
+              {# Policy metadata strip #}
+              <div
+                class="p-3 mb-4 rounded"
+                style="background:var(--agg-accent-light); border:1px solid rgba(74,159,212,0.3);"
+              >
+                <div class="row g-2" style="font-size:0.82rem;">
+                  <div class="col-6 col-md-3">
+                    <span style="font-size:0.68rem; font-weight:700; text-transform:uppercase; letter-spacing:0.07em; color:var(--agg-text-muted);">Document ID</span><br/>
+                    <strong style="color:var(--agg-primary); font-family:'Consolas','Courier New',monospace; font-size:0.78rem;">{{ policy_document.document_id | e }}</strong>
+                  </div>
+                  <div class="col-6 col-md-3">
+                    <span style="font-size:0.68rem; font-weight:700; text-transform:uppercase; letter-spacing:0.07em; color:var(--agg-text-muted);">Version</span><br/>
+                    <strong style="color:var(--agg-primary);">{{ policy_document.version | e }}</strong>
+                  </div>
+                  <div class="col-6 col-md-3">
+                    <span style="font-size:0.68rem; font-weight:700; text-transform:uppercase; letter-spacing:0.07em; color:var(--agg-text-muted);">Generated</span><br/>
+                    <strong style="color:var(--agg-primary);">{{ policy_document.generated_date | e }}</strong>
+                  </div>
+                  <div class="col-6 col-md-3">
+                    <span style="font-size:0.68rem; font-weight:700; text-transform:uppercase; letter-spacing:0.07em; color:var(--agg-text-muted);">Risk Level</span><br/>
+                    {{ render_risk_badge_inline(policy_document.overall_risk_level) }}
+                  </div>
+                </div>
+              </div>
+
+              <p style="font-size:0.85rem; color:var(--agg-text-muted); margin-bottom:1.5rem;">
+                <i class="bi bi-eye me-1" aria-hidden="true"></i>
+                Preview of the generated AI Use Policy.
+                Download the DOCX or PDF for the complete, formatted document
+                ready for review and adoption.
+              </p>
+
+              {# Section previews #}
+              {% for section in policy_document.sections %}
+              <div class="policy-section-preview" id="policy-sec-{{ section.section_number | e }}">
+                <div class="sec-header">
+                  <span class="sec-num">{{ section.section_number | e }}</span>
+                  <span class="sec-title">{{ section.title | e }}</span>
+                </div>
+                <div class="sec-content">
+                  {{ section.content | truncate(280, True, '…') | e }}
+                </div>
+              </div>
+              {% endfor %}
+
+              <div class="text-center mt-3">
+                <a
+                  href="{{ url_for('main.download_pdf') }}"
+                  class="btn btn-agg-primary d-inline-flex align-items-center gap-2"
+                >
+                  <i class="bi bi-file-earmark-pdf" aria-hidden="true"></i>
+                  View Full Policy (PDF)
+                </a>
+                <a
+                  href="{{ url_for('main.download_docx') }}"
+                  class="btn btn-agg-secondary ms-2 d-inline-flex align-items-center gap-2"
+                >
+                  <i class="bi bi-file-earmark-word" aria-hidden="true"></i>
+                  Download DOCX
+                </a>
+              </div>
+
+            {% else %}
+              <div class="alert alert-warning d-flex align-items-center gap-2" role="alert">
+                <i class="bi bi-exclamation-circle" aria-hidden="true"></i>
+                <div>Policy document preview is unavailable. Please download the DOCX for the full policy.</div>
+              </div>
+            {% endif %}
+
+          </div>{# /policy-pane #}
+
+
+          {# ============================================================
+             TAB 4: SCORE DETAIL
+             ============================================================ #}
+          <div
+            class="tab-pane fade"
+            id="scores-pane"
+            role="tabpanel"
+            aria-labelledby="scores-tab"
+            tabindex="0"
+          >
+
+            <p style="font-size:0.85rem; color:var(--agg-text-muted); margin-bottom:1.5rem;">
+              Detailed breakdown of risk scores by category and question.
+              Unanswered questions are treated as maximum risk (score 3).
+            </p>
+
+            {# Per-category score detail #}
+            {% for cr in assessment.category_results %}
+            <div class="agg-card mb-4" id="score-cat-{{ cr.category_id }}">
+
+              <div class="card-header d-flex align-items-center gap-3 flex-wrap">
+                <span class="fw-bold">
+                  {% if cr.category_id == 'data' %}<i class="bi bi-database me-1" aria-hidden="true"></i>
+                  {% elif cr.category_id == 'model' %}<i class="bi bi-cpu me-1" aria-hidden="true"></i>
+                  {% elif cr.category_id == 'ops' %}<i class="bi bi-shield-lock me-1" aria-hidden="true"></i>
+                  {% elif cr.category_id == 'compliance' %}<i class="bi bi-clipboard-check me-1" aria-hidden="true"></i>
+                  {% endif %}
+                  {{ cr.category_label | e }}
+                </span>
+                <span class="ms-auto d-flex align-items-center gap-2">
+                  <span style="font-size:0.82rem; color:rgba(255,255,255,0.75);">
+                    {{ cr.normalised_score | round(1) }}/100
+                  </span>
+                  <span class="cat-risk-badge level-{{ cr.risk_level | lower }}">{{ cr.risk_level | e }}</span>
+                </span>
+              </div>
+
+              <div class="p-3">
+
+                {# Category score progress bar #}
+                <div class="d-flex align-items-center gap-3 mb-3">
+                  <div class="flex-grow-1">
+                    <div class="risk-progress-bar">
+                      <div
+                        class="risk-progress-fill level-{{ cr.risk_level | lower }}"
+                        data-width="{{ cr.normalised_score | round(1) }}%"
+                        style="width: {{ cr.normalised_score | round(1) }}%;"
+                        role="progressbar"
+                        aria-valuenow="{{ cr.normalised_score | round }}"
+                        aria-valuemin="0"
+                        aria-valuemax="100"
+                        aria-label="{{ cr.category_label }} risk score"
+                      ></div>
+                    </div>
+                  </div>
+                  <div style="flex-shrink:0; font-size:0.8rem; color:var(--agg-text-muted);">
+                    {{ cr.answered_questions }}/{{ cr.total_questions }} answered
+                    ({{ cr.completion_pct | round }}%)
+                  </div>
+                </div>
+
+                {# Per-question detail table #}
+                {% if cr.question_details %}
+                <div class="table-responsive">
+                  <table class="table table-sm table-hover" style="font-size:0.8rem;" aria-label="Question details for {{ cr.category_label }}">
+                    <thead style="background:var(--agg-bg);">
+                      <tr>
+                        <th scope="col" style="font-size:0.7rem; text-transform:uppercase; letter-spacing:0.06em; color:var(--agg-text-muted); font-weight:700;">Question</th>
+                        <th scope="col" style="font-size:0.7rem; text-transform:uppercase; letter-spacing:0.06em; color:var(--agg-text-muted); font-weight:700; width:5rem;">Risk Wt</th>
+                        <th scope="col" style="font-size:0.7rem; text-transform:uppercase; letter-spacing:0.06em; color:var(--agg-text-muted); font-weight:700; width:5rem;">Q Weight</th>
+                        <th scope="col" style="font-size:0.7rem; text-transform:uppercase; letter-spacing:0.06em; color:var(--agg-text-muted); font-weight:700; width:5rem;">Score</th>
+                        <th scope="col" style="font-size:0.7rem; text-transform:uppercase; letter-spacing:0.06em; color:var(--agg-text-muted); font-weight:700; width:5rem;">Max</th>
+                        <th scope="col" style="font-size:0.7rem; text-transform:uppercase; letter-spacing:0.06em; color:var(--agg-text-muted); font-weight:700; width:5rem;">Answered</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {% for detail in cr.question_details %}
+                      <tr {% if not detail.answered %}style="background:#fffbf0;"{% endif %}>
+                        <td style="line-height:1.3;">
+                          <span style="font-family:'Consolas','Courier New',monospace; font-size:0.7rem; color:var(--agg-primary-light); margin-right:0.4rem;">{{ detail.question_id | e }}</span>
+                          <span>{{ detail.text | truncate(80, True, '…') | e }}</span>
+                        </td>
+                        <td class="text-center fw-bold">
+                          {% if detail.option_risk_weight == 0 %}
+                            <span style="color:var(--agg-risk-low);">{{ detail.option_risk_weight }}</span>
+                          {% elif detail.option_risk_weight == 1 %}
+                            <span style="color:#fbbf24;">{{ detail.option_risk_weight }}</span>
+                          {% elif detail.option_risk_weight == 2 %}
+                            <span style="color:var(--agg-risk-medium);">{{ detail.option_risk_weight }}</span>
+                          {% else %}
+                            <span style="color:var(--agg-risk-high);">{{ detail.option_risk_weight }}</span>
+                          {% endif %}
+                        </td>
+                        <td class="text-center text-muted">{{ detail.weight }}</td>
+                        <td class="text-center fw-semibold">{{ detail.raw_contribution | round(2) }}</td>
+                        <td class="text-center text-muted">{{ detail.max_contribution | round(2) }}</td>
+                        <td class="text-center">
+                          {% if detail.answered %}
+                            <i class="bi bi-check-circle-fill text-success" aria-label="Answered" title="Answered"></i>
+                          {% else %}
+                            <i class="bi bi-dash-circle text-warning" aria-label="Not answered" title="Not answered — max risk applied"></i>
+                          {% endif %}
+                        </td>
+                      </tr>
+                      {% endfor %}
+                    </tbody>
+                    <tfoot style="background:var(--agg-bg);">
+                      <tr>
+                        <td colspan="3" class="fw-bold text-end" style="font-size:0.78rem;">Category Total:</td>
+                        <td class="text-center fw-bold">{{ cr.raw_score | round(2) }}</td>
+                        <td class="text-center text-muted">{{ cr.max_possible_score | round(2) }}</td>
+                        <td class="text-center fw-bold">{{ cr.answered_questions }}/{{ cr.total_questions }}</td>
+                      </tr>
+                      <tr>
+                        <td colspan="5" class="fw-bold text-end" style="font-size:0.78rem;">Normalised Score:</td>
+                        <td class="text-center fw-bold">
+                          {{ render_risk_badge_inline(cr.risk_level) }}
+                          {{ cr.normalised_score | round(1) }}
+                        </td>
+                      </tr>
+                    </tfoot>
+                  </table>
+                </div>
+                {% else %}
+                <p class="text-muted" style="font-size:0.85rem;">No question detail available for this category.</p>
+                {% endif %}
+
+              </div>{# /card body #}
+            </div>{# /agg-card #}
+            {% endfor %}
+
+            {# Overall score summary #}
+            <div
+              class="p-3 rounded mb-2"
+              style="background:var(--agg-primary); color:#fff;"
+            >
+              <div class="row align-items-center g-2">
+                <div class="col-auto">
+                  <strong style="font-size:0.85rem; text-transform:uppercase; letter-spacing:0.07em;">Overall Score:</strong>
+                </div>
+                <div class="col-auto">
+                  <span style="font-size:1.6rem; font-weight:800;">{{ assessment.overall_score | round(1) }}</span>
+                  <span style="color:rgba(255,255,255,0.55);">/100</span>
+                </div>
+                <div class="col-auto">
+                  <span class="risk-pill-lg level-{{ assessment.overall_risk_level | lower }}">{{ assessment.overall_risk_level | e }}</span>
+                </div>
+                <div class="col-auto ms-auto" style="font-size:0.8rem; color:rgba(255,255,255,0.65);">
+                  Framework: {{ assessment.framework_label | e }}
+                </div>
+              </div>
+            </div>
+
+            <p class="text-muted" style="font-size:0.78rem; margin-top:0.5rem;">
+              <i class="bi bi-info-circle me-1" aria-hidden="true"></i>
+              The overall score is the equally-weighted mean of all four category normalised scores.
+              Categories with unanswered questions are scored at maximum risk.
+            </p>
+
+          </div>{# /scores-pane #}
+
+        </div>{# /tab-content #}
+
+      </div>{# /right column #}
+    </div>{# /row #}
+  </div>{# /container #}
+</div>{# /results-body #}
+
+
+{# ================================================================
+   BOTTOM CTA STRIP
+   ================================================================ #}
+<div
+  style="background: linear-gradient(135deg, var(--agg-primary-dark) 0%, var(--agg-primary) 100%); padding: 2rem 0;"
+  role="complementary"
+  aria-label="Download your governance documents"
+>
+  <div class="container-xl">
+    <div class="row align-items-center g-3">
+      <div class="col-12 col-md-7">
+        <h2 style="font-size:1.25rem; font-weight:700; color:#fff; margin-bottom:0.3rem;">
+          <i class="bi bi-file-earmark-check me-2" aria-hidden="true"></i>
+          Ready to download your governance package?
+        </h2>
+        <p style="font-size:0.9rem; color:rgba(255,255,255,0.75); margin:0;">
+          Your AI Use Policy, Governance Checklist, and SSP Entries are ready.
+          Download in DOCX for editing or PDF for sharing with reviewers.
+        </p>
+      </div>
+      <div class="col-12 col-md-5">
+        <div class="d-flex flex-wrap gap-2 justify-content-md-end">
+          <a
+            href="{{ url_for('main.download_docx') }}"
+            class="btn btn-download"
+            style="background:#fff; color:var(--agg-primary); font-weight:700; border:none;"
+            aria-label="Download DOCX document package"
+          >
+            <i class="bi bi-file-earmark-word" aria-hidden="true"></i>
+            Download DOCX
+          </a>
+          <a
+            href="{{ url_for('main.download_pdf') }}"
+            class="btn btn-download"
+            style="background:var(--agg-risk-high); color:#fff; font-weight:700; border:none;"
+            aria-label="Download PDF document package"
+          >
+            <i class="bi bi-file-earmark-pdf" aria-hidden="true"></i>
+            Download PDF
+          </a>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+
+
+{% block scripts %}
+<script>
+/* ================================================================
+   RESULTS PAGE SCRIPTS
+   ================================================================ */
+(function () {
+  'use strict';
+
+  /* ----------------------------------------------------------------
+     Animate score progress bars on page load
+     ---------------------------------------------------------------- */
+  function animateBars() {
+    document.querySelectorAll('[data-width]').forEach(function (bar) {
+      var targetWidth = bar.getAttribute('data-width');
+      bar.style.width = '0%';
+      requestAnimationFrame(function () {
+        requestAnimationFrame(function () {
+          bar.style.width = targetWidth;
+        });
+      });
+    });
+  }
+
+  document.addEventListener('DOMContentLoaded', animateBars);
+
+  /* ----------------------------------------------------------------
+     Re-animate bars when tabs become visible
+     ---------------------------------------------------------------- */
+  document.querySelectorAll('[data-bs-toggle="tab"]').forEach(function (tabBtn) {
+    tabBtn.addEventListener('shown.bs.tab', function () {
+      animateBars();
+    });
+  });
+
+  /* ----------------------------------------------------------------
+     Download button loading state
+     ---------------------------------------------------------------- */
+  document.querySelectorAll('a[href*="download"]').forEach(function (link) {
+    link.addEventListener('click', function () {
+      var originalHtml = link.innerHTML;
+      link.innerHTML = '<span class="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span>Generating&hellip;';
+      link.classList.add('disabled');
+      link.setAttribute('aria-disabled', 'true');
+
+      // Re-enable after 8 seconds in case download fails
+      setTimeout(function () {
+        link.innerHTML = originalHtml;
+        link.classList.remove('disabled');
+        link.removeAttribute('aria-disabled');
+      }, 8000);
+    });
+  });
+
+  /* ----------------------------------------------------------------
+     Smooth scroll to anchored SSP entries
+     ---------------------------------------------------------------- */
+  document.querySelectorAll('a[href^="#ssp-"]').forEach(function (anchor) {
+    anchor.addEventListener('click', function (e) {
+      var targetId = this.getAttribute('href').substring(1);
+      var target = document.getElementById(targetId);
+      if (!target) return;
+
+      // Activate the SSP tab first
+      var sspTabBtn = document.getElementById('ssp-tab');
+      if (sspTabBtn) {
+        var bsTab = bootstrap.Tab.getOrCreateInstance(sspTabBtn);
+        bsTab.show();
+      }
+
+      e.preventDefault();
+      setTimeout(function () {
+        target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        target.setAttribute('tabindex', '-1');
+        target.focus({ preventScroll: true });
+        // Brief highlight
+        target.style.transition = 'box-shadow 0.3s ease';
+        target.style.boxShadow = '0 0 0 3px rgba(74,159,212,0.5)';
+        setTimeout(function () {
+          target.style.boxShadow = '';
+        }, 1500);
+      }, 350);
+    });
+  });
+
+  /* ----------------------------------------------------------------
+     Copy assessment ID to clipboard (if button present)
+     ---------------------------------------------------------------- */
+  document.querySelectorAll('[data-copy-target]').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      var targetSel = btn.getAttribute('data-copy-target');
+      var targetEl = document.querySelector(targetSel);
+      if (!targetEl) return;
+      navigator.clipboard.writeText(targetEl.textContent.trim()).then(function () {
+        var orig = btn.innerHTML;
+        btn.innerHTML = '<i class="bi bi-check" aria-hidden="true"></i> Copied';
+        setTimeout(function () { btn.innerHTML = orig; }, 2000);
+      });
+    });
+  });
+
+})();
+</script>
+{% endblock %}
