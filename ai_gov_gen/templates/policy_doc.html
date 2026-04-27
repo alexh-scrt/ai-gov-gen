@@ -1,0 +1,1438 @@
+<!DOCTYPE html>
+<!--
+ai_gov_gen/templates/policy_doc.html
+
+HTML template for the AI Use Policy document rendered by WeasyPrint for PDF
+export and optionally displayed inline.  This template is designed to produce
+a professional, print-ready governance document with:
+
+* A cover page with system metadata and risk summary
+* A table of contents
+* Numbered policy sections rendered from PolicyDocument.sections
+* An embedded governance checklist summary
+* SSP control entries table
+* Print-optimised CSS with page breaks, headers, and footers
+
+Context variables (provided by generator.render_policy_html):
+  policy            — PolicyDocument instance
+  policy_dict       — policy.to_dict() plain dict
+  assessment        — AssessmentResult instance
+  assessment_dict   — assessment.to_dict() plain dict
+  checklist         — GovernanceChecklist instance (may be None)
+  checklist_dict    — checklist.to_dict() or None
+  ssp_entries       — list[SSPEntry] (may be None)
+  ssp_entries_dicts — list of SSP entry dicts
+  risk_badge_classes — dict mapping risk level -> Bootstrap colour class
+  risk_priorities   — dict mapping risk level -> priority label string
+-->
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AI Use Policy &mdash; {{ policy.system_name | e }}</title>
+  <style>
+    /* ================================================================
+       CSS RESET AND BASE
+       ================================================================ */
+    *, *::before, *::after {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    /* ================================================================
+       TYPOGRAPHY AND COLOUR PALETTE
+       ================================================================ */
+    :root {
+      --color-primary:    #1a3a5c;
+      --color-secondary:  #2e6da4;
+      --color-accent:     #4a9fd4;
+      --color-text:       #212529;
+      --color-muted:      #6c757d;
+      --color-border:     #dee2e6;
+      --color-bg-light:   #f8f9fa;
+      --color-bg-cover:   #1a3a5c;
+
+      /* Risk level colours */
+      --color-low:        #198754;
+      --color-medium:     #fd7e14;
+      --color-high:       #dc3545;
+      --color-critical:   #212529;
+
+      /* Spacing */
+      --spacing-xs:  0.25rem;
+      --spacing-sm:  0.5rem;
+      --spacing-md:  1rem;
+      --spacing-lg:  1.5rem;
+      --spacing-xl:  2rem;
+      --spacing-xxl: 3rem;
+
+      /* Typography */
+      --font-body:    "DejaVu Serif", Georgia, "Times New Roman", serif;
+      --font-heading: "DejaVu Sans", Arial, Helvetica, sans-serif;
+      --font-mono:    "DejaVu Sans Mono", "Courier New", monospace;
+      --font-size-base: 10pt;
+      --font-size-sm:   8.5pt;
+      --font-size-lg:   12pt;
+      --font-size-xl:   14pt;
+      --font-size-xxl:  18pt;
+      --font-size-hero: 26pt;
+
+      /* Layout */
+      --page-margin: 2cm;
+    }
+
+    html, body {
+      font-family: var(--font-body);
+      font-size: var(--font-size-base);
+      color: var(--color-text);
+      line-height: 1.6;
+      background: #ffffff;
+    }
+
+    /* ================================================================
+       PRINT / PAGE SETUP (WeasyPrint)
+       ================================================================ */
+    @page {
+      size: A4;
+      margin: var(--page-margin);
+
+      @top-left {
+        content: "AI Use Policy — {{ policy.system_name | e }}";
+        font-family: var(--font-heading);
+        font-size: 7.5pt;
+        color: var(--color-muted);
+      }
+
+      @top-right {
+        content: "INTERNAL — RESTRICTED";
+        font-family: var(--font-heading);
+        font-size: 7.5pt;
+        color: var(--color-muted);
+      }
+
+      @bottom-left {
+        content: "Document ID: {{ policy.document_id | e }} | Version {{ policy.version | e }} | {{ policy.generated_date | e }}";
+        font-family: var(--font-heading);
+        font-size: 7pt;
+        color: var(--color-muted);
+      }
+
+      @bottom-right {
+        content: "Page " counter(page) " of " counter(pages);
+        font-family: var(--font-heading);
+        font-size: 7pt;
+        color: var(--color-muted);
+      }
+    }
+
+    @page cover {
+      margin: 0;
+      @top-left   { content: none; }
+      @top-right  { content: none; }
+      @bottom-left  { content: none; }
+      @bottom-right { content: none; }
+    }
+
+    /* ================================================================
+       COVER PAGE
+       ================================================================ */
+    .cover-page {
+      page: cover;
+      page-break-after: always;
+      background-color: var(--color-bg-cover);
+      color: #ffffff;
+      min-height: 29.7cm;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      padding: 3cm 2.5cm;
+    }
+
+    .cover-logo-area {
+      display: flex;
+      align-items: center;
+      margin-bottom: var(--spacing-xxl);
+    }
+
+    .cover-logo-text {
+      font-family: var(--font-heading);
+      font-size: var(--font-size-xl);
+      font-weight: bold;
+      letter-spacing: 0.05em;
+      color: rgba(255,255,255,0.9);
+    }
+
+    .cover-logo-badge {
+      display: inline-block;
+      background: var(--color-accent);
+      color: #ffffff;
+      font-family: var(--font-heading);
+      font-size: 7pt;
+      font-weight: bold;
+      padding: 2pt 6pt;
+      border-radius: 3pt;
+      margin-left: var(--spacing-sm);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+
+    .cover-main {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+    }
+
+    .cover-doc-type {
+      font-family: var(--font-heading);
+      font-size: var(--font-size-sm);
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      color: var(--color-accent);
+      margin-bottom: var(--spacing-md);
+    }
+
+    .cover-title {
+      font-family: var(--font-heading);
+      font-size: var(--font-size-hero);
+      font-weight: bold;
+      line-height: 1.2;
+      color: #ffffff;
+      margin-bottom: var(--spacing-sm);
+    }
+
+    .cover-system-name {
+      font-family: var(--font-heading);
+      font-size: var(--font-size-xxl);
+      color: var(--color-accent);
+      margin-bottom: var(--spacing-xl);
+      font-style: italic;
+    }
+
+    .cover-divider {
+      width: 6cm;
+      height: 2pt;
+      background: var(--color-accent);
+      margin-bottom: var(--spacing-xl);
+    }
+
+    .cover-meta-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-bottom: var(--spacing-xl);
+    }
+
+    .cover-meta-table td {
+      padding: 5pt 0;
+      font-family: var(--font-heading);
+      font-size: var(--font-size-sm);
+      vertical-align: top;
+      border-bottom: 1pt solid rgba(255,255,255,0.15);
+    }
+
+    .cover-meta-table td.meta-label {
+      color: rgba(255,255,255,0.65);
+      width: 35%;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      font-size: 7.5pt;
+    }
+
+    .cover-meta-table td.meta-value {
+      color: #ffffff;
+      font-weight: 600;
+    }
+
+    .cover-risk-banner {
+      padding: var(--spacing-md) var(--spacing-lg);
+      border-radius: 4pt;
+      display: inline-block;
+      font-family: var(--font-heading);
+      font-size: var(--font-size-lg);
+      font-weight: bold;
+      letter-spacing: 0.04em;
+      margin-top: var(--spacing-lg);
+    }
+
+    .cover-risk-banner.risk-low      { background: var(--color-low);      color: #fff; }
+    .cover-risk-banner.risk-medium   { background: var(--color-medium);   color: #fff; }
+    .cover-risk-banner.risk-high     { background: var(--color-high);     color: #fff; }
+    .cover-risk-banner.risk-critical { background: var(--color-critical); color: #fff; }
+
+    .cover-footer {
+      border-top: 1pt solid rgba(255,255,255,0.2);
+      padding-top: var(--spacing-md);
+    }
+
+    .cover-footer-text {
+      font-family: var(--font-heading);
+      font-size: 7.5pt;
+      color: rgba(255,255,255,0.55);
+      line-height: 1.5;
+    }
+
+    .cover-classification {
+      display: inline-block;
+      background: rgba(255,255,255,0.12);
+      color: rgba(255,255,255,0.8);
+      font-family: var(--font-heading);
+      font-size: 7pt;
+      font-weight: bold;
+      padding: 2pt 8pt;
+      border-radius: 2pt;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      margin-bottom: var(--spacing-sm);
+    }
+
+    /* ================================================================
+       TABLE OF CONTENTS
+       ================================================================ */
+    .toc-page {
+      page-break-after: always;
+      padding-top: var(--spacing-lg);
+    }
+
+    .toc-title {
+      font-family: var(--font-heading);
+      font-size: var(--font-size-xl);
+      font-weight: bold;
+      color: var(--color-primary);
+      border-bottom: 2pt solid var(--color-secondary);
+      padding-bottom: var(--spacing-sm);
+      margin-bottom: var(--spacing-lg);
+    }
+
+    .toc-list {
+      list-style: none;
+      padding: 0;
+    }
+
+    .toc-list li {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      padding: 4pt 0;
+      border-bottom: 0.5pt dotted var(--color-border);
+      font-size: var(--font-size-base);
+    }
+
+    .toc-list li:last-child {
+      border-bottom: none;
+    }
+
+    .toc-section-ref {
+      font-family: var(--font-heading);
+      font-weight: bold;
+      color: var(--color-secondary);
+      min-width: 1.5cm;
+    }
+
+    .toc-section-title {
+      flex: 1;
+      padding: 0 var(--spacing-sm);
+      color: var(--color-text);
+    }
+
+    .toc-dots {
+      flex: 1;
+      border-bottom: 1pt dotted var(--color-border);
+      margin: 0 var(--spacing-sm);
+      margin-bottom: 3pt;
+    }
+
+    .toc-page-num {
+      font-family: var(--font-heading);
+      color: var(--color-muted);
+      font-size: var(--font-size-sm);
+    }
+
+    /* ================================================================
+       DOCUMENT BODY LAYOUT
+       ================================================================ */
+    .document-body {
+      padding-top: var(--spacing-lg);
+    }
+
+    /* ================================================================
+       SECTION HEADINGS
+       ================================================================ */
+    .section-container {
+      margin-bottom: var(--spacing-xl);
+      page-break-inside: avoid;
+    }
+
+    .section-header {
+      display: flex;
+      align-items: baseline;
+      gap: var(--spacing-md);
+      border-bottom: 1.5pt solid var(--color-secondary);
+      padding-bottom: var(--spacing-xs);
+      margin-bottom: var(--spacing-md);
+      page-break-after: avoid;
+    }
+
+    .section-number {
+      font-family: var(--font-heading);
+      font-size: var(--font-size-lg);
+      font-weight: bold;
+      color: var(--color-secondary);
+      min-width: 2cm;
+    }
+
+    .section-title {
+      font-family: var(--font-heading);
+      font-size: var(--font-size-lg);
+      font-weight: bold;
+      color: var(--color-primary);
+    }
+
+    /* ================================================================
+       POLICY SECTION CONTENT
+       ================================================================ */
+    .section-content {
+      font-size: var(--font-size-base);
+      line-height: 1.7;
+      color: var(--color-text);
+    }
+
+    /* Markdown-like rendering for section content */
+    .section-content p {
+      margin-bottom: var(--spacing-md);
+    }
+
+    .section-content strong {
+      font-weight: bold;
+      color: var(--color-primary);
+    }
+
+    .section-content em {
+      font-style: italic;
+    }
+
+    .section-content ul, .section-content ol {
+      margin: var(--spacing-sm) 0 var(--spacing-md) var(--spacing-xl);
+    }
+
+    .section-content li {
+      margin-bottom: var(--spacing-xs);
+    }
+
+    .section-content blockquote {
+      border-left: 3pt solid var(--color-accent);
+      padding: var(--spacing-sm) var(--spacing-md);
+      margin: var(--spacing-md) 0;
+      background: var(--color-bg-light);
+      font-style: italic;
+      color: var(--color-muted);
+    }
+
+    .section-content table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: var(--spacing-md) 0;
+      font-size: var(--font-size-sm);
+    }
+
+    .section-content table th {
+      background: var(--color-primary);
+      color: #ffffff;
+      font-family: var(--font-heading);
+      font-size: var(--font-size-sm);
+      padding: 5pt 8pt;
+      text-align: left;
+      font-weight: bold;
+    }
+
+    .section-content table td {
+      padding: 5pt 8pt;
+      border: 0.5pt solid var(--color-border);
+      vertical-align: top;
+    }
+
+    .section-content table tr:nth-child(even) td {
+      background: var(--color-bg-light);
+    }
+
+    /* Sub-headings within sections (e.g. "3.1 System Ownership") */
+    .section-content .subsection-heading {
+      font-family: var(--font-heading);
+      font-size: var(--font-size-base);
+      font-weight: bold;
+      color: var(--color-primary);
+      margin-top: var(--spacing-lg);
+      margin-bottom: var(--spacing-sm);
+      page-break-after: avoid;
+    }
+
+    /* ================================================================
+       RISK SCORE SUMMARY BOX
+       ================================================================ */
+    .risk-summary-box {
+      background: var(--color-bg-light);
+      border: 1pt solid var(--color-border);
+      border-left: 4pt solid var(--color-secondary);
+      border-radius: 3pt;
+      padding: var(--spacing-md) var(--spacing-lg);
+      margin: var(--spacing-lg) 0;
+      page-break-inside: avoid;
+    }
+
+    .risk-summary-box h3 {
+      font-family: var(--font-heading);
+      font-size: var(--font-size-base);
+      font-weight: bold;
+      color: var(--color-primary);
+      margin-bottom: var(--spacing-md);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .risk-summary-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: var(--spacing-sm) var(--spacing-lg);
+    }
+
+    .risk-summary-item {
+      display: flex;
+      flex-direction: column;
+    }
+
+    .risk-summary-label {
+      font-family: var(--font-heading);
+      font-size: 7.5pt;
+      color: var(--color-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 2pt;
+    }
+
+    .risk-summary-value {
+      font-family: var(--font-heading);
+      font-size: var(--font-size-base);
+      font-weight: bold;
+      color: var(--color-text);
+    }
+
+    /* ================================================================
+       RISK LEVEL BADGES
+       ================================================================ */
+    .risk-badge {
+      display: inline-block;
+      padding: 1.5pt 7pt;
+      border-radius: 3pt;
+      font-family: var(--font-heading);
+      font-size: 7.5pt;
+      font-weight: bold;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: #ffffff;
+    }
+
+    .risk-badge.risk-low      { background: var(--color-low); }
+    .risk-badge.risk-medium   { background: var(--color-medium); }
+    .risk-badge.risk-high     { background: var(--color-high); }
+    .risk-badge.risk-critical { background: var(--color-critical); }
+
+    /* ================================================================
+       GOVERNANCE CHECKLIST SECTION
+       ================================================================ */
+    .checklist-section {
+      page-break-before: always;
+    }
+
+    .checklist-section-header {
+      font-family: var(--font-heading);
+      font-size: var(--font-size-xl);
+      font-weight: bold;
+      color: var(--color-primary);
+      border-bottom: 2pt solid var(--color-secondary);
+      padding-bottom: var(--spacing-sm);
+      margin-bottom: var(--spacing-lg);
+    }
+
+    .checklist-category-block {
+      margin-bottom: var(--spacing-xl);
+      page-break-inside: avoid;
+    }
+
+    .checklist-category-header {
+      display: flex;
+      align-items: center;
+      gap: var(--spacing-md);
+      background: var(--color-primary);
+      color: #ffffff;
+      padding: var(--spacing-sm) var(--spacing-md);
+      border-radius: 2pt;
+      margin-bottom: var(--spacing-md);
+    }
+
+    .checklist-category-name {
+      font-family: var(--font-heading);
+      font-size: var(--font-size-base);
+      font-weight: bold;
+      flex: 1;
+    }
+
+    .checklist-category-score {
+      font-family: var(--font-heading);
+      font-size: var(--font-size-sm);
+      color: rgba(255,255,255,0.8);
+    }
+
+    .checklist-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: var(--font-size-sm);
+      margin-bottom: var(--spacing-md);
+    }
+
+    .checklist-table thead tr {
+      background: var(--color-bg-light);
+    }
+
+    .checklist-table thead th {
+      font-family: var(--font-heading);
+      font-size: 7.5pt;
+      font-weight: bold;
+      color: var(--color-primary);
+      padding: 5pt 7pt;
+      text-align: left;
+      border: 0.5pt solid var(--color-border);
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+
+    .checklist-table tbody td {
+      padding: 5pt 7pt;
+      border: 0.5pt solid var(--color-border);
+      vertical-align: top;
+      line-height: 1.5;
+    }
+
+    .checklist-table tbody tr:nth-child(even) td {
+      background: #fafafa;
+    }
+
+    .checklist-action-cell {
+      font-weight: 600;
+      color: var(--color-text);
+    }
+
+    .checklist-rationale-cell {
+      color: var(--color-muted);
+      font-size: 7.5pt;
+    }
+
+    .checklist-ref-cell {
+      font-family: var(--font-mono);
+      font-size: 7pt;
+      color: var(--color-secondary);
+      white-space: nowrap;
+    }
+
+    .checkbox-cell {
+      text-align: center;
+      width: 0.8cm;
+    }
+
+    .checkbox-cell .box {
+      display: inline-block;
+      width: 10pt;
+      height: 10pt;
+      border: 1pt solid var(--color-border);
+      border-radius: 1pt;
+    }
+
+    /* ================================================================
+       SSP ENTRIES SECTION
+       ================================================================ */
+    .ssp-section {
+      page-break-before: always;
+    }
+
+    .ssp-section-header {
+      font-family: var(--font-heading);
+      font-size: var(--font-size-xl);
+      font-weight: bold;
+      color: var(--color-primary);
+      border-bottom: 2pt solid var(--color-secondary);
+      padding-bottom: var(--spacing-sm);
+      margin-bottom: var(--spacing-lg);
+    }
+
+    .ssp-entry {
+      border: 0.5pt solid var(--color-border);
+      border-radius: 3pt;
+      margin-bottom: var(--spacing-lg);
+      page-break-inside: avoid;
+    }
+
+    .ssp-entry-header {
+      background: var(--color-primary);
+      color: #ffffff;
+      padding: var(--spacing-sm) var(--spacing-md);
+      border-radius: 2pt 2pt 0 0;
+      display: flex;
+      align-items: center;
+      gap: var(--spacing-md);
+    }
+
+    .ssp-entry-id {
+      font-family: var(--font-mono);
+      font-size: var(--font-size-sm);
+      color: rgba(255,255,255,0.7);
+      min-width: 4cm;
+    }
+
+    .ssp-entry-name {
+      font-family: var(--font-heading);
+      font-size: var(--font-size-base);
+      font-weight: bold;
+      flex: 1;
+    }
+
+    .ssp-entry-body {
+      padding: var(--spacing-md);
+    }
+
+    .ssp-field-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: var(--font-size-sm);
+    }
+
+    .ssp-field-table tr td:first-child {
+      font-family: var(--font-heading);
+      font-weight: bold;
+      color: var(--color-primary);
+      width: 4.5cm;
+      vertical-align: top;
+      padding: 4pt 8pt 4pt 0;
+      font-size: 7.5pt;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+
+    .ssp-field-table tr td:last-child {
+      vertical-align: top;
+      padding: 4pt 0;
+      color: var(--color-text);
+      line-height: 1.5;
+    }
+
+    .ssp-field-table tr {
+      border-bottom: 0.5pt solid var(--color-border);
+    }
+
+    .ssp-field-table tr:last-child {
+      border-bottom: none;
+    }
+
+    .status-badge {
+      display: inline-block;
+      padding: 1.5pt 7pt;
+      border-radius: 3pt;
+      font-family: var(--font-heading);
+      font-size: 7pt;
+      font-weight: bold;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+
+    .status-implemented       { background: #d1e7dd; color: #0a3622; }
+    .status-partially         { background: #fff3cd; color: #664d03; }
+    .status-planned           { background: #cfe2ff; color: #084298; }
+    .status-not-implemented   { background: #f8d7da; color: #58151c; }
+    .status-not-applicable    { background: #e2e3e5; color: #41464b; }
+
+    .evidence-list {
+      list-style: disc;
+      margin-left: var(--spacing-lg);
+    }
+
+    .evidence-list li {
+      font-size: 7.5pt;
+      color: var(--color-muted);
+      margin-bottom: 2pt;
+    }
+
+    /* ================================================================
+       WARNING BOXES
+       ================================================================ */
+    .warnings-box {
+      background: #fff3cd;
+      border: 1pt solid #ffc107;
+      border-left: 4pt solid #ffc107;
+      border-radius: 3pt;
+      padding: var(--spacing-md);
+      margin: var(--spacing-lg) 0;
+      page-break-inside: avoid;
+    }
+
+    .warnings-box h4 {
+      font-family: var(--font-heading);
+      font-size: var(--font-size-sm);
+      font-weight: bold;
+      color: #664d03;
+      margin-bottom: var(--spacing-sm);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .warnings-box ul {
+      list-style: disc;
+      margin-left: var(--spacing-lg);
+    }
+
+    .warnings-box li {
+      font-size: var(--font-size-sm);
+      color: #664d03;
+      margin-bottom: 3pt;
+    }
+
+    /* ================================================================
+       DISCLAIMER BOX
+       ================================================================ */
+    .disclaimer-box {
+      background: #f8d7da;
+      border: 1pt solid #dc3545;
+      border-left: 4pt solid #dc3545;
+      border-radius: 3pt;
+      padding: var(--spacing-md);
+      margin: var(--spacing-xl) 0 var(--spacing-md) 0;
+      page-break-inside: avoid;
+    }
+
+    .disclaimer-box p {
+      font-family: var(--font-heading);
+      font-size: 7.5pt;
+      color: #58151c;
+      line-height: 1.5;
+    }
+
+    .disclaimer-box strong {
+      font-weight: bold;
+    }
+
+    /* ================================================================
+       PAGE BREAK UTILITIES
+       ================================================================ */
+    .page-break-before { page-break-before: always; }
+    .page-break-after  { page-break-after: always; }
+    .avoid-break       { page-break-inside: avoid; }
+
+    /* ================================================================
+       UTILITY CLASSES
+       ================================================================ */
+    .text-muted   { color: var(--color-muted); }
+    .text-primary { color: var(--color-primary); }
+    .text-center  { text-align: center; }
+    .text-right   { text-align: right; }
+    .font-bold    { font-weight: bold; }
+    .font-heading { font-family: var(--font-heading); }
+    .font-mono    { font-family: var(--font-mono); }
+    .small        { font-size: var(--font-size-sm); }
+
+    /* ================================================================
+       PRINT-SPECIFIC OVERRIDES
+       ================================================================ */
+    @media print {
+      a { color: inherit; text-decoration: none; }
+
+      .checklist-table  { font-size: 7pt; }
+      .ssp-field-table  { font-size: 7pt; }
+    }
+  </style>
+</head>
+<body>
+
+{# ================================================================
+   MACRO: render risk badge
+   ================================================================ #}
+{%- macro risk_badge(level) -%}
+  {%- set level_lower = level | lower -%}
+  <span class="risk-badge risk-{{ level_lower }}">{{ level | e }}</span>
+{%- endmacro -%}
+
+{# ================================================================
+   MACRO: render status badge
+   ================================================================ #}
+{%- macro status_badge(status) -%}
+  {%- if status == 'Implemented' -%}
+    <span class="status-badge status-implemented">Implemented</span>
+  {%- elif status == 'Partially Implemented' -%}
+    <span class="status-badge status-partially">Partially Implemented</span>
+  {%- elif status == 'Planned' -%}
+    <span class="status-badge status-planned">Planned</span>
+  {%- elif status == 'Not Applicable' -%}
+    <span class="status-badge status-not-applicable">Not Applicable</span>
+  {%- else -%}
+    <span class="status-badge status-not-implemented">Not Implemented</span>
+  {%- endif -%}
+{%- endmacro -%}
+
+{# ================================================================
+   MACRO: render policy section content
+   Converts the plain-text section content (which uses Markdown-like
+   conventions) into HTML paragraphs and lists.
+   ================================================================ #}
+{%- macro render_section_content(content) -%}
+  {%- set lines = content.split('\n') -%}
+  {%- set ns = namespace(in_list=false, buffer='') -%}
+  {%- for line in lines -%}
+    {%- if line.startswith('- ') or line.startswith('* ') -%}
+      {%- if not ns.in_list -%}
+        <ul>
+        {%- set ns.in_list = true -%}
+      {%- endif -%}
+      <li>{{ line[2:] | e }}</li>
+    {%- else -%}
+      {%- if ns.in_list -%}
+        </ul>
+        {%- set ns.in_list = false -%}
+      {%- endif -%}
+      {%- if line.startswith('> ') -%}
+        <blockquote><p>{{ line[2:] | e }}</p></blockquote>
+      {%- elif line.startswith('**') and line.endswith('**') -%}
+        <p class="subsection-heading">{{ line[2:-2] | e }}</p>
+      {%- elif line.startswith('| ') -%}
+        {# Skip markdown table syntax lines — tables are pre-rendered #}
+        {{ line | e }}<br />
+      {%- elif line.strip() == '' -%}
+        {# blank line = paragraph break #}
+        <br />
+      {%- else -%}
+        {# Process inline bold (**text**) and italic (*text*) #}
+        {%- set processed = line | e -%}
+        <p>{{ processed }}</p>
+      {%- endif -%}
+    {%- endif -%}
+  {%- endfor -%}
+  {%- if ns.in_list -%}
+    </ul>
+  {%- endif -%}
+{%- endmacro -%}
+
+
+<!-- ================================================================
+     COVER PAGE
+     ================================================================ -->
+<div class="cover-page">
+
+  <!-- Logo / branding area -->
+  <div class="cover-logo-area">
+    <span class="cover-logo-text">AI Gov Gen</span>
+    <span class="cover-logo-badge">Automated Governance</span>
+  </div>
+
+  <!-- Main title area -->
+  <div class="cover-main">
+    <p class="cover-doc-type">Governance Document &mdash; AI Use Policy</p>
+    <h1 class="cover-title">AI Use Policy</h1>
+    <p class="cover-system-name">{{ policy.system_name | e }}</p>
+    <div class="cover-divider"></div>
+
+    <!-- Metadata table -->
+    <table class="cover-meta-table">
+      <tbody>
+        <tr>
+          <td class="meta-label">System Owner</td>
+          <td class="meta-value">{{ policy.system_owner | e }}</td>
+        </tr>
+        <tr>
+          <td class="meta-label">Compliance Framework</td>
+          <td class="meta-value">{{ policy.framework_label | e }}</td>
+        </tr>
+        <tr>
+          <td class="meta-label">Document ID</td>
+          <td class="meta-value">{{ policy.document_id | e }}</td>
+        </tr>
+        <tr>
+          <td class="meta-label">Version</td>
+          <td class="meta-value">{{ policy.version | e }}</td>
+        </tr>
+        <tr>
+          <td class="meta-label">Generated Date</td>
+          <td class="meta-value">{{ policy.generated_date | e }}</td>
+        </tr>
+        <tr>
+          <td class="meta-label">Overall Risk Score</td>
+          <td class="meta-value">{{ assessment.overall_score | round(1) }} / 100</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <!-- Risk level banner -->
+    <div class="cover-risk-banner risk-{{ assessment.overall_risk_level | lower }}">
+      Overall Risk Level: {{ assessment.overall_risk_level | e }}
+    </div>
+  </div>
+
+  <!-- Footer -->
+  <div class="cover-footer">
+    <div class="cover-classification">Internal &mdash; Restricted</div>
+    <p class="cover-footer-text">
+      This document was generated automatically by <strong>AI Gov Gen</strong>
+      using responses to the structured AI risk assessment questionnaire.
+      It must be reviewed by a qualified compliance or legal professional
+      before formal adoption. &copy; {{ policy.generated_date[:4] }} AI Gov Gen.
+    </p>
+  </div>
+
+</div><!-- /cover-page -->
+
+
+<!-- ================================================================
+     TABLE OF CONTENTS
+     ================================================================ -->
+<div class="toc-page">
+  <h2 class="toc-title">Table of Contents</h2>
+  <ol class="toc-list">
+    {% for section in policy.sections %}
+    <li>
+      <span class="toc-section-ref">{{ section.section_number | e }}</span>
+      <span class="toc-section-title">{{ section.title | e }}</span>
+      <span class="toc-dots"></span>
+      <span class="toc-page-num">&hellip;</span>
+    </li>
+    {% endfor %}
+    {% if checklist %}
+    <li>
+      <span class="toc-section-ref">A</span>
+      <span class="toc-section-title">Annex A &mdash; Governance Checklist</span>
+      <span class="toc-dots"></span>
+      <span class="toc-page-num">&hellip;</span>
+    </li>
+    {% endif %}
+    {% if ssp_entries %}
+    <li>
+      <span class="toc-section-ref">B</span>
+      <span class="toc-section-title">Annex B &mdash; SSP Control Entries</span>
+      <span class="toc-dots"></span>
+      <span class="toc-page-num">&hellip;</span>
+    </li>
+    {% endif %}
+  </ol>
+
+  <!-- Risk summary by category -->
+  <div class="risk-summary-box" style="margin-top: 1.5rem;">
+    <h3>Risk Assessment Summary</h3>
+    <div class="risk-summary-grid">
+      <div class="risk-summary-item">
+        <span class="risk-summary-label">Overall Risk Level</span>
+        <span class="risk-summary-value">
+          {{ risk_badge(assessment.overall_risk_level) }}
+          &nbsp;{{ assessment.overall_score | round(1) }}/100
+        </span>
+      </div>
+      <div class="risk-summary-item">
+        <span class="risk-summary-label">Framework</span>
+        <span class="risk-summary-value">{{ assessment.framework_label | e }}</span>
+      </div>
+      {% for cr in assessment.category_results %}
+      <div class="risk-summary-item">
+        <span class="risk-summary-label">{{ cr.category_label | e }}</span>
+        <span class="risk-summary-value">
+          {{ risk_badge(cr.risk_level) }}
+          &nbsp;{{ cr.normalised_score | round(1) }}/100
+        </span>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+
+  <!-- Warnings (if any) -->
+  {% if policy.warnings %}
+  <div class="warnings-box">
+    <h4>&#9888; Assessment Warnings</h4>
+    <ul>
+      {% for warning in policy.warnings %}
+      <li>{{ warning | e }}</li>
+      {% endfor %}
+    </ul>
+  </div>
+  {% endif %}
+
+</div><!-- /toc-page -->
+
+
+<!-- ================================================================
+     POLICY SECTIONS
+     ================================================================ -->
+<div class="document-body">
+
+  {% for section in policy.sections %}
+  <div class="section-container{% if loop.first %} page-break-before{% endif %}" id="section-{{ section.section_number | e }}">
+
+    <!-- Section heading -->
+    <div class="section-header">
+      <span class="section-number">{{ section.section_number | e }}</span>
+      <span class="section-title">{{ section.title | e }}</span>
+    </div>
+
+    <!-- Section body -->
+    <div class="section-content">
+      {#
+        The section content uses Markdown-like conventions written by the
+        Jinja2 generator. We process it line by line to produce HTML.
+        Since WeasyPrint does not support JavaScript, we do this server-side.
+      #}
+      {%- set lines = section.content.split('\n') -%}
+      {%- set ns = namespace(in_list=false, in_table=false, table_rows=[]) -%}
+
+      {%- for line in lines -%}
+        {%- set stripped = line.strip() -%}
+
+        {%- if stripped.startswith('| ') and stripped.endswith(' |') -%}
+          {# Markdown table row #}
+          {%- if not ns.in_table -%}
+            {%- set ns.in_table = true -%}
+            <table>
+          {%- endif -%}
+          {%- set cells = stripped[1:-1].split(' | ') -%}
+          {%- if cells | length > 0 -%}
+            {%- if '---' in cells[0] -%}
+              {# separator row — skip #}
+            {%- elif not ns.in_list -%}
+              <tr>
+                {%- for cell in cells -%}
+                  <td>{{ cell.strip() | e }}</td>
+                {%- endfor -%}
+              </tr>
+            {%- endif -%}
+          {%- endif -%}
+
+        {%- elif stripped.startswith('- ') or stripped.startswith('* ') -%}
+          {# Close table if open #}
+          {%- if ns.in_table -%}
+            </table>
+            {%- set ns.in_table = false -%}
+          {%- endif -%}
+          {# Open list if not open #}
+          {%- if not ns.in_list -%}
+            <ul>
+            {%- set ns.in_list = true -%}
+          {%- endif -%}
+          <li>{{ stripped[2:] | e }}</li>
+
+        {%- else -%}
+          {# Close list if open #}
+          {%- if ns.in_list -%}
+            </ul>
+            {%- set ns.in_list = false -%}
+          {%- endif -%}
+          {# Close table if open #}
+          {%- if ns.in_table -%}
+            </table>
+            {%- set ns.in_table = false -%}
+          {%- endif -%}
+
+          {%- if stripped == '' -%}
+            {# blank line — paragraph separator #}
+          {%- elif stripped.startswith('> ') -%}
+            <blockquote><p>{{ stripped[2:] | e }}</p></blockquote>
+          {%- elif stripped.startswith('**') and stripped.endswith('**') and stripped | length > 4 -%}
+            {# Section sub-heading **Title** #}
+            <p class="subsection-heading">{{ stripped[2:-2] | e }}</p>
+          {%- else -%}
+            {# Regular paragraph — handle inline bold (**text**) #}
+            {%- set rendered_line = stripped | e -%}
+            <p>{{ rendered_line }}</p>
+          {%- endif -%}
+        {%- endif -%}
+      {%- endfor -%}
+
+      {# Close any open tags #}
+      {%- if ns.in_list -%}</ul>{%- endif -%}
+      {%- if ns.in_table -%}</table>{%- endif -%}
+    </div><!-- /section-content -->
+
+  </div><!-- /section-container -->
+  {% endfor %}
+
+</div><!-- /document-body -->
+
+
+<!-- ================================================================
+     ANNEX A — GOVERNANCE CHECKLIST
+     ================================================================ -->
+{% if checklist %}
+<div class="checklist-section" id="annex-a">
+
+  <h2 class="checklist-section-header">
+    Annex A &mdash; Governance Checklist
+  </h2>
+
+  <p style="font-size: {{ 'var(--font-size-sm)' }}; color: var(--color-muted); margin-bottom: var(--spacing-lg);">
+    The checklist below contains {{ checklist.total_items }} actionable control items
+    identified from the AI risk assessment of
+    <strong>{{ checklist.system_name | e }}</strong>.
+    Items are ordered within each category by severity (Critical first).
+    Use the checkbox column to track completion status.
+  </p>
+
+  <!-- Overall summary strip -->
+  <div style="display: flex; gap: 1.5rem; margin-bottom: 1.5rem; flex-wrap: wrap;">
+    <div style="flex: 1; min-width: 4cm;">
+      <span style="font-family: var(--font-heading); font-size: 7.5pt; color: var(--color-muted); text-transform: uppercase;">Total Items</span><br/>
+      <strong style="font-size: 1.2rem; font-family: var(--font-heading);">{{ checklist.total_items }}</strong>
+    </div>
+    <div style="flex: 1; min-width: 4cm;">
+      <span style="font-family: var(--font-heading); font-size: 7.5pt; color: var(--color-muted); text-transform: uppercase;">Critical Items</span><br/>
+      <strong style="font-size: 1.2rem; font-family: var(--font-heading); color: var(--color-critical);">{{ checklist.total_critical_items }}</strong>
+    </div>
+    <div style="flex: 1; min-width: 4cm;">
+      <span style="font-family: var(--font-heading); font-size: 7.5pt; color: var(--color-muted); text-transform: uppercase;">Overall Risk</span><br/>
+      {{ risk_badge(checklist.overall_risk_level) }}
+    </div>
+    <div style="flex: 1; min-width: 4cm;">
+      <span style="font-family: var(--font-heading); font-size: 7.5pt; color: var(--color-muted); text-transform: uppercase;">Framework</span><br/>
+      <strong style="font-family: var(--font-heading); font-size: 9pt;">{{ checklist.framework_label | e }}</strong>
+    </div>
+  </div>
+
+  <!-- Per-category checklist tables -->
+  {% for category in checklist.categories %}
+  {% if category.items %}
+  <div class="checklist-category-block avoid-break">
+
+    <!-- Category header bar -->
+    <div class="checklist-category-header">
+      <span class="checklist-category-name">{{ category.category_label | e }}</span>
+      <span class="checklist-category-score">
+        Risk:&nbsp;{{ category.risk_level | e }}&nbsp;|&nbsp;
+        Score:&nbsp;{{ category.normalised_score | round(1) }}/100&nbsp;|&nbsp;
+        Items:&nbsp;{{ category.item_count }}
+      </span>
+    </div>
+
+    <!-- Checklist items table -->
+    <table class="checklist-table">
+      <thead>
+        <tr>
+          <th style="width:0.8cm;">Done</th>
+          <th style="width:2.5cm;">Control Ref</th>
+          <th style="width:1.8cm;">Priority</th>
+          <th>Required Action</th>
+          <th style="width:4cm;">Rationale</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for item in category.items %}
+        <tr>
+          <td class="checkbox-cell"><span class="box"></span></td>
+          <td class="checklist-ref-cell">{{ item.control_ref | e }}</td>
+          <td style="white-space:nowrap;">
+            {{ risk_badge(item.risk_level) }}
+          </td>
+          <td class="checklist-action-cell">{{ item.action | e }}</td>
+          <td class="checklist-rationale-cell">{{ item.rationale | e }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+
+  </div><!-- /checklist-category-block -->
+  {% endif %}
+  {% endfor %}
+
+</div><!-- /checklist-section -->
+{% endif %}
+
+
+<!-- ================================================================
+     ANNEX B — SSP CONTROL ENTRIES
+     ================================================================ -->
+{% if ssp_entries and ssp_entries | length > 0 %}
+<div class="ssp-section" id="annex-b">
+
+  <h2 class="ssp-section-header">
+    Annex B &mdash; System Security Plan (SSP) Control Entries
+  </h2>
+
+  <p style="font-size: var(--font-size-sm); color: var(--color-muted); margin-bottom: var(--spacing-lg);">
+    The following SSP control entries document the implementation status of key
+    AI governance controls for <strong>{{ policy.system_name | e }}</strong>.
+    These entries are suitable for insertion into the organisation's System Security
+    Plan or equivalent security baseline documentation.
+    Assessment conducted: {{ policy.generated_date | e }}.
+  </p>
+
+  <!-- Implementation status summary table -->
+  <table style="width:100%; border-collapse:collapse; margin-bottom: 1.5rem; font-size:var(--font-size-sm);">
+    <thead>
+      <tr style="background: var(--color-bg-light);">
+        <th style="padding:5pt 8pt; border:0.5pt solid var(--color-border); font-family:var(--font-heading); color:var(--color-primary); text-align:left;">Entry ID</th>
+        <th style="padding:5pt 8pt; border:0.5pt solid var(--color-border); font-family:var(--font-heading); color:var(--color-primary); text-align:left;">Control Name</th>
+        <th style="padding:5pt 8pt; border:0.5pt solid var(--color-border); font-family:var(--font-heading); color:var(--color-primary); text-align:left;">Family</th>
+        <th style="padding:5pt 8pt; border:0.5pt solid var(--color-border); font-family:var(--font-heading); color:var(--color-primary); text-align:left;">Status</th>
+        <th style="padding:5pt 8pt; border:0.5pt solid var(--color-border); font-family:var(--font-heading); color:var(--color-primary); text-align:left;">Risk</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for entry in ssp_entries %}
+      <tr {% if loop.index is even %}style="background:#fafafa;"{% endif %}>
+        <td style="padding:4pt 8pt; border:0.5pt solid var(--color-border); font-family:var(--font-mono); font-size:7pt; color:var(--color-secondary);">{{ entry.entry_id | e }}</td>
+        <td style="padding:4pt 8pt; border:0.5pt solid var(--color-border);">{{ entry.control_name | e }}</td>
+        <td style="padding:4pt 8pt; border:0.5pt solid var(--color-border); color:var(--color-muted);">{{ entry.control_family | e }}</td>
+        <td style="padding:4pt 8pt; border:0.5pt solid var(--color-border);">{{ status_badge(entry.implementation_status) }}</td>
+        <td style="padding:4pt 8pt; border:0.5pt solid var(--color-border);">{{ risk_badge(entry.risk_level) }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  <!-- Detailed SSP entries -->
+  {% for entry in ssp_entries %}
+  <div class="ssp-entry" id="ssp-{{ entry.entry_id | e }}">
+
+    <!-- Entry header bar -->
+    <div class="ssp-entry-header">
+      <span class="ssp-entry-id">{{ entry.entry_id | e }}</span>
+      <span class="ssp-entry-name">{{ entry.control_name | e }}</span>
+      <span>{{ status_badge(entry.implementation_status) }}</span>
+      <span style="margin-left:0.5rem;">{{ risk_badge(entry.risk_level) }}</span>
+    </div>
+
+    <!-- Entry body -->
+    <div class="ssp-entry-body">
+      <table class="ssp-field-table">
+        <tbody>
+          <tr>
+            <td>Control Family</td>
+            <td>{{ entry.control_family | e }}</td>
+          </tr>
+          <tr>
+            <td>Control Reference</td>
+            <td><span style="font-family:var(--font-mono); font-size:7.5pt; color:var(--color-secondary);">{{ entry.control_ref | e }}</span></td>
+          </tr>
+          <tr>
+            <td>Description</td>
+            <td>{{ entry.control_description | e }}</td>
+          </tr>
+          <tr>
+            <td>Responsible Role</td>
+            <td>{{ entry.responsible_role | e }}</td>
+          </tr>
+          <tr>
+            <td>Implementation Status</td>
+            <td>{{ status_badge(entry.implementation_status) }}</td>
+          </tr>
+          <tr>
+            <td>Implementation Detail</td>
+            <td>{{ entry.implementation_detail | e }}</td>
+          </tr>
+          <tr>
+            <td>Assessment Finding</td>
+            <td>{{ entry.assessment_finding | e }}</td>
+          </tr>
+          {% if entry.implementation_status != 'Implemented' and entry.implementation_status != 'Not Applicable' %}
+          <tr>
+            <td>Remediation Action</td>
+            <td style="color: var(--color-high); font-weight: 600;">{{ entry.remediation_action | e }}</td>
+          </tr>
+          {% endif %}
+          <tr>
+            <td>Evidence Artefacts</td>
+            <td>
+              <ul class="evidence-list">
+                {% for artefact in entry.evidence_artifacts %}
+                <li>{{ artefact | e }}</li>
+                {% endfor %}
+              </ul>
+            </td>
+          </tr>
+          <tr>
+            <td>Applicable Frameworks</td>
+            <td>
+              <span style="font-family:var(--font-mono); font-size:7pt; color:var(--color-muted);">{{ entry.frameworks | join(', ') | e }}</span>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div><!-- /ssp-entry-body -->
+
+  </div><!-- /ssp-entry -->
+  {% endfor %}
+
+</div><!-- /ssp-section -->
+{% endif %}
+
+
+<!-- ================================================================
+     LEGAL DISCLAIMER
+     ================================================================ -->
+<div class="disclaimer-box" style="margin-top: 2rem;">
+  <p>
+    <strong>Legal Disclaimer:</strong>
+    This document was generated automatically by AI Gov Gen based on questionnaire
+    responses provided by the system owner. It is intended as a starting point for
+    governance documentation and does not constitute legal, regulatory, or professional
+    compliance advice. The organisation is solely responsible for ensuring that its
+    AI systems comply with applicable laws and regulations. This document must be
+    reviewed, validated, and approved by qualified compliance, legal, and/or security
+    professionals before formal adoption or submission to any regulatory body.
+  </p>
+</div>
+
+
+<!-- ================================================================
+     SIGNATURE BLOCK
+     ================================================================ -->
+<div style="margin-top: 2rem; page-break-inside: avoid;">
+  <table style="width:100%; border-collapse:collapse; font-size:var(--font-size-sm);">
+    <thead>
+      <tr style="background: var(--color-primary);">
+        <th colspan="3" style="padding:6pt 10pt; color:#fff; font-family:var(--font-heading); text-align:left; font-size:var(--font-size-sm); text-transform:uppercase; letter-spacing:0.05em;">
+          Document Approval and Sign-off
+        </th>
+      </tr>
+      <tr style="background: var(--color-bg-light);">
+        <th style="padding:5pt 8pt; border:0.5pt solid var(--color-border); font-family:var(--font-heading); color:var(--color-primary); text-align:left;">Role</th>
+        <th style="padding:5pt 8pt; border:0.5pt solid var(--color-border); font-family:var(--font-heading); color:var(--color-primary); text-align:left;">Name &amp; Signature</th>
+        <th style="padding:5pt 8pt; border:0.5pt solid var(--color-border); font-family:var(--font-heading); color:var(--color-primary); text-align:left;">Date</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td style="padding:16pt 8pt; border:0.5pt solid var(--color-border);">System Owner<br/><span style="color:var(--color-muted); font-size:7.5pt;">{{ policy.system_owner | e }}</span></td>
+        <td style="padding:16pt 8pt; border:0.5pt solid var(--color-border);"></td>
+        <td style="padding:16pt 8pt; border:0.5pt solid var(--color-border);"></td>
+      </tr>
+      <tr>
+        <td style="padding:16pt 8pt; border:0.5pt solid var(--color-border);">AI Governance Authority</td>
+        <td style="padding:16pt 8pt; border:0.5pt solid var(--color-border);"></td>
+        <td style="padding:16pt 8pt; border:0.5pt solid var(--color-border);"></td>
+      </tr>
+      <tr>
+        <td style="padding:16pt 8pt; border:0.5pt solid var(--color-border);">Information Security Officer</td>
+        <td style="padding:16pt 8pt; border:0.5pt solid var(--color-border);"></td>
+        <td style="padding:16pt 8pt; border:0.5pt solid var(--color-border);"></td>
+      </tr>
+      <tr>
+        <td style="padding:16pt 8pt; border:0.5pt solid var(--color-border);">Legal / Compliance Reviewer</td>
+        <td style="padding:16pt 8pt; border:0.5pt solid var(--color-border);"></td>
+        <td style="padding:16pt 8pt; border:0.5pt solid var(--color-border);"></td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+
+<!-- ================================================================
+     DOCUMENT FOOTER (printed on last page body)
+     ================================================================ -->
+<div style="margin-top:2rem; padding-top:0.75rem; border-top:0.5pt solid var(--color-border); font-family:var(--font-heading); font-size:7pt; color:var(--color-muted); text-align:center;">
+  AI Use Policy &mdash; {{ policy.system_name | e }} &mdash;
+  Document ID: {{ policy.document_id | e }} &mdash;
+  Version {{ policy.version | e }} &mdash;
+  Generated: {{ policy.generated_date | e }} &mdash;
+  Framework: {{ policy.framework_label | e }} &mdash;
+  Classification: INTERNAL &mdash; RESTRICTED
+</div>
+
+</body>
+</html>
