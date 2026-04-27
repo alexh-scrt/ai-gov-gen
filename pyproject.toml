@@ -1,0 +1,60 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.backends.legacy:build"
+
+[project]
+name = "ai_gov_gen"
+version = "0.1.0"
+description = "AI governance document generator guided by structured risk assessment questionnaires aligned with HKS AI Risk Framework and NIST AI RMF"
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+authors = [
+    { name = "AI Gov Gen Contributors" }
+]
+keywords = ["ai", "governance", "risk", "compliance", "nist", "cmmc", "flask"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Framework :: Flask",
+    "Intended Audience :: Information Technology",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Security",
+    "Topic :: Office/Business",
+]
+dependencies = [
+    "flask>=3.0.0",
+    "jinja2>=3.1.0",
+    "python-docx>=1.1.0",
+    "weasyprint>=62.0",
+    "markupsafe>=2.1.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0.0",
+    "pytest-cov>=4.1.0",
+]
+
+[project.scripts]
+ai-gov-gen = "ai_gov_gen:create_app"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["ai_gov_gen*"]
+
+[tool.setuptools.package-data]
+ai_gov_gen = ["templates/**/*.html", "static/**/*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = "-v --tb=short"
+
+[tool.coverage.run]
+source = ["ai_gov_gen"]
+omit = ["tests/*"]
